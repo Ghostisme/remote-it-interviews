@@ -116,12 +116,17 @@ export function AppShell({ children }: { children: ReactNode }) {
       }}
     >
       {!compact ? (
-        <View
+        <ScrollView
           style={{
             width: t.layout.sidebar,
+            flexGrow: 0,
+            flexShrink: 0,
             backgroundColor: t.color.surface,
             borderRightWidth: 1,
             borderColor: t.color.line,
+          }}
+          contentContainerStyle={{
+            flexGrow: 1,
             paddingHorizontal: 18,
             paddingTop: 31,
             paddingBottom: 20,
@@ -262,7 +267,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </Stack>
             <Badge tone="neutral">Demo</Badge>
           </Row>
-        </View>
+        </ScrollView>
       ) : null}
       <View style={{ flex: 1, minWidth: 0 }}>
         <Row

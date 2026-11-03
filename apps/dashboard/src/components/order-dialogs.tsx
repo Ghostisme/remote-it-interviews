@@ -186,7 +186,7 @@ export function NewOrderDialog({
             <Stack gap={16} style={{ flex: 1, minWidth: 220 }}>
               <Card padding={18} style={{ backgroundColor: "#F8FAF8" }}>
                 <Stack gap={16}>
-                  <Row>
+                  <Row wrap>
                     <ShoppingBag size={17} color={t.color.brand} />
                     <Txt size={14} weight="semibold">
                       Order summary

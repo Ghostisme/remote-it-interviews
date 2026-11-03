@@ -93,7 +93,14 @@ test("menu → customer → settings → delivery → kitchen → CRM → revenu
       ).json();
       menuItemId = item.id;
       expect(item.priceCents).toBe(1235);
-      await page.getByRole("textbox", { name: "Search your menu...", exact: true }).fill(dishName);
+      // The response arrives before query invalidation finishes and the modal closes.
+      // Wait for the actual UI state before typing into the page behind its focus trap.
+      await expect(
+        page.getByRole("dialog", { name: "Something new on the menu", exact: true }),
+      ).toBeHidden();
+      const menuSearch = page.getByRole("textbox", { name: "Search your menu...", exact: true });
+      await menuSearch.fill(dishName);
+      await expect(menuSearch).toHaveValue(dishName);
       await page.getByRole("button", { name: `Edit ${dishName}`, exact: true }).click();
       await page.getByRole("textbox", { name: "Price (USD)", exact: true }).fill("12.75");
       const edited: MenuItem = await (
@@ -102,6 +109,10 @@ test("menu → customer → settings → delivery → kitchen → CRM → revenu
         )
       ).json();
       expect(edited.priceCents).toBe(1275);
+      await expect(
+        page.getByRole("dialog", { name: "A little menu refinement", exact: true }),
+      ).toBeHidden();
+      await expect(menuSearch).toHaveValue(dishName);
       await expect(page.getByText("$12.75", { exact: true })).toBeVisible();
       await responseFrom(page, `/menu/${item.id}`, "PATCH", () =>
         page.getByRole("switch", { name: "Available", exact: true }).click(),
@@ -170,7 +181,12 @@ test("menu → customer → settings → delivery → kitchen → CRM → revenu
       ).json();
       expect(saved.deliveryFeeCents).toBe(450);
       expect(saved.taxRateBps).toBe(825);
-      await expect(page.getByText("Orders paused", { exact: true })).toBeVisible();
+      expect(saved.acceptingOrders).toBe(false);
+      await expect(
+        page.getByRole("switch", { name: "Accepting orders", exact: true }),
+      ).not.toBeChecked();
+      if ((page.viewportSize()?.width ?? 1440) > 600)
+        await expect(page.getByText("Orders paused", { exact: true })).toBeVisible();
       await page.getByRole("button", { name: "New order", exact: true }).click();
       await expect(
         page.getByText("New orders are paused. Enable accepting orders in Settings to continue."),

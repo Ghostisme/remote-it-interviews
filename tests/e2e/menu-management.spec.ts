@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { expect, request as apiRequest, test } from "@playwright/test";
+import { request as apiRequest, expect, test } from "@playwright/test";
 import pg from "pg";
 import type {
   Category,
@@ -89,9 +89,20 @@ test("rename categories and archive, restore and delete dishes without losing or
       page.getByRole("button", { name: `Delete category Chef specials ${suffix}`, exact: true }),
     ).toBeDisabled();
     await page.getByRole("button", { name: "Done", exact: true }).click();
-    await expect(
-      page.getByRole("tab", { name: new RegExp(`Chef specials ${suffix}`) }),
-    ).toBeVisible();
+    if ((page.viewportSize()?.width ?? 1440) < 650) {
+      await page.getByRole("button", { name: /^Menu category:/ }).click();
+      await expect(
+        page.getByRole("button", { name: `Chef specials ${suffix}`, exact: true }),
+      ).toBeVisible();
+      await page
+        .getByRole("dialog", { name: "Menu category", exact: true })
+        .getByRole("button", { name: "Close dialog", exact: true })
+        .click();
+    } else {
+      await expect(
+        page.getByRole("tab", { name: new RegExp(`Chef specials ${suffix}`) }),
+      ).toBeVisible();
+    }
 
     for (const item of items) {
       await page.getByRole("textbox", { name: "Search your menu...", exact: true }).fill(item.name);
@@ -125,7 +136,7 @@ test("rename categories and archive, restore and delete dishes without losing or
     await page.getByRole("button", { name: `Restore ${items[0]?.name}`, exact: true }).click();
     await page.getByRole("button", { name: "Restore dish", exact: true }).click();
     await expect(page.getByRole("dialog", { name: "Back on the menu?", exact: true })).toBeHidden();
-    await page.getByRole("tab", { name: /^Active menu/ }).click();
+    await page.getByRole("tab", { name: /^Active\b/ }).click();
     await page.getByRole("button", { name: `Edit ${items[0]?.name}`, exact: true }).click();
     await page.getByRole("button", { name: "Archive dish", exact: true }).click();
     await page

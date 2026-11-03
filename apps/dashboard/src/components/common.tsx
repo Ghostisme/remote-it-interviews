@@ -71,7 +71,11 @@ export function PageHeading({
           {subtitle}
         </Txt>
       </Stack>
-      {action}
+      {action ? (
+        <Row wrap style={{ maxWidth: "100%", flexShrink: 1 }}>
+          {action}
+        </Row>
+      ) : null}
     </Row>
   );
 }
@@ -85,8 +89,8 @@ export function SectionHeading({
   action?: ReactNode;
 }) {
   return (
-    <Row style={{ justifyContent: "space-between" }}>
-      <Stack gap={3}>
+    <Row wrap style={{ justifyContent: "space-between" }}>
+      <Stack gap={3} style={{ flex: 1, minWidth: 0 }}>
         <Txt size={16} weight="semibold">
           {title}
         </Txt>
@@ -149,7 +153,7 @@ export function Tabs({
   onChange: (value: string) => void;
 }) {
   return (
-    <Row wrap gap={5}>
+    <Row wrap gap={5} style={{ maxWidth: "100%", flexShrink: 1 }}>
       {options.map((option) => (
         <Interactive
           key={option.value}
@@ -157,6 +161,7 @@ export function Tabs({
           accessibilityState={{ selected: value === option.value }}
           onPress={() => onChange(option.value)}
           style={({ hovered }) => ({
+            maxWidth: "100%",
             paddingHorizontal: 15,
             paddingVertical: 9,
             borderRadius: 8,
@@ -169,6 +174,7 @@ export function Tabs({
               size={12}
               weight={value === option.value ? "semibold" : "medium"}
               color={value === option.value ? t.color.brand : t.color.muted}
+              style={{ flexShrink: 1 }}
             >
               {option.label}
             </Txt>

@@ -101,7 +101,10 @@ export function Txt({
     <Text
       testID={testID}
       numberOfLines={lines}
-      style={[{ fontFamily: t.font[weight], fontSize: size, color, lineHeight: size * 1.5 }, style]}
+      style={[
+        { fontFamily: t.font[weight], fontSize: size, color, lineHeight: size * 1.5, minWidth: 0 },
+        style,
+      ]}
     >
       {children}
     </Text>
@@ -266,12 +269,14 @@ export function Badge({
         paddingVertical: 4,
         borderRadius: t.radius.sm,
         alignSelf: "flex-start",
+        maxWidth: "100%",
+        minWidth: 0,
       }}
     >
       {dot ? (
         <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: colors.fg }} />
       ) : null}
-      <Txt size={11} weight="medium" color={colors.fg}>
+      <Txt size={11} weight="medium" color={colors.fg} lines={1} style={{ flexShrink: 1 }}>
         {children}
       </Txt>
     </Row>
@@ -311,6 +316,7 @@ export function Field({
   ...props
 }: TextInputProps & { label?: string; error?: string; hint?: string }) {
   const [focused, setFocused] = useState(false);
+  const { width } = useWindowDimensions();
   return (
     <Stack gap={6} style={{ flex: 1 }}>
       {label ? (
@@ -341,7 +347,7 @@ export function Field({
             color: t.color.ink,
             backgroundColor: props.editable === false ? t.color.soft : t.color.surface,
             fontFamily: t.font.regular,
-            fontSize: 13,
+            fontSize: width < 600 ? 16 : 13,
           },
           style,
         ]}
@@ -365,6 +371,7 @@ export function SearchField({
   placeholder?: string;
   style?: ViewStyle;
 }) {
+  const { width } = useWindowDimensions();
   return (
     <Row
       gap={8}
@@ -392,7 +399,7 @@ export function SearchField({
           minWidth: 0,
           paddingVertical: 10,
           fontFamily: t.font.regular,
-          fontSize: 13,
+          fontSize: width < 600 ? 16 : 13,
           color: t.color.ink,
         }}
       />
@@ -460,6 +467,7 @@ export function Dialog({
   wide?: boolean;
 }) {
   const { width, height } = useWindowDimensions();
+  const padding = width < 400 ? 16 : 24;
   const [id] = useState(() => `odyssey-dialog-${++dialogCount}`);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
@@ -477,13 +485,18 @@ export function Dialog({
     const previous = previousFocus.current;
     const timer = setTimeout(() => {
       const el = document.getElementById(id);
-      (el?.querySelector("input, button, [tabindex='0']") as HTMLElement | null)?.focus();
-    }, 100);
+      if (openDialogs[openDialogs.length - 1] !== id || el?.contains(document.activeElement))
+        return;
+      (
+        (el?.querySelector("input, textarea") ??
+          el?.querySelector("button:not(:disabled), [tabindex='0']")) as HTMLElement | null
+      )?.focus();
+    }, 0);
     const handler = (event: KeyboardEvent) => {
       if (openDialogs[openDialogs.length - 1] !== id) return;
       if (event.key === "Escape") {
         event.preventDefault();
-        closeRef.current();
+        if (!event.repeat) closeRef.current();
       }
       if (event.key !== "Tab") return;
       const nodes = document
@@ -519,8 +532,11 @@ export function Dialog({
     <Modal
       visible={visible}
       transparent
-      animationType="fade"
-      onRequestClose={onClose}
+      // Web's fade activates the new focus trap only after the animation ends.
+      // Immediate activation prevents the previous dialog from stealing typed input.
+      animationType={Platform.OS === "web" ? "none" : "fade"}
+      // The web stack handles Escape on keydown; RN Web also closes on keyup.
+      onRequestClose={Platform.OS === "web" ? undefined : onClose}
       onDismiss={restoreFocus}
     >
       <View
@@ -553,7 +569,7 @@ export function Dialog({
         >
           <Row
             style={{
-              padding: 24,
+              padding,
               borderBottomWidth: 1,
               borderColor: t.color.line,
               justifyContent: "space-between",
@@ -576,13 +592,14 @@ export function Dialog({
               onPress={onClose}
             />
           </Row>
-          <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ padding: 24 }}>
+          <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ padding }}>
             {children}
           </ScrollView>
           {footer ? (
             <Row
               style={{
-                padding: 20,
+                padding: width < 400 ? 16 : 20,
+                width: "100%",
                 borderTopWidth: 1,
                 borderColor: t.color.line,
                 justifyContent: "flex-end",
@@ -614,7 +631,7 @@ export function Select({
 }) {
   const [open, setOpen] = useState(false);
   return (
-    <Stack gap={6}>
+    <Stack gap={6} style={{ maxWidth: "100%", minWidth: label ? 0 : 130 }}>
       {label ? (
         <Txt size={12} weight="medium">
           {label}
@@ -632,7 +649,7 @@ export function Select({
         onPress={() => setOpen(true)}
         style={({ hovered }) => ({
           minHeight: 42,
-          minWidth: 130,
+          minWidth: 0,
           borderWidth: 1,
           borderColor: t.color.line,
           backgroundColor: hovered ? t.color.soft : t.color.surface,
@@ -644,7 +661,9 @@ export function Select({
           gap: 14,
         })}
       >
-        <Txt size={12}>{options.find((o) => o.value === value)?.label ?? placeholder}</Txt>
+        <Txt size={12} lines={1} style={{ flex: 1, minWidth: 0 }}>
+          {options.find((o) => o.value === value)?.label ?? placeholder}
+        </Txt>
         <ChevronDown size={14} color={t.color.muted} />
       </Pressable>
       <Dialog visible={open} title={label ?? "Select an option"} onClose={() => setOpen(false)}>
@@ -894,6 +913,7 @@ export function Pagination({
 }
 const ToastContext = createContext<(message: string, tone?: Tone) => void>(() => {});
 export function ToastProvider({ children }: { children: ReactNode }) {
+  const { width } = useWindowDimensions();
   const [toast, setToast] = useState<{ message: string; tone: Tone } | null>(null);
   useEffect(() => {
     if (!toast) return;
@@ -911,7 +931,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             right: 24,
             bottom: 24,
             left: Platform.OS === "web" ? undefined : 24,
-            maxWidth: 440,
+            maxWidth: Math.min(440, width - 48),
             padding: 16,
             borderRadius: t.radius.lg,
             backgroundColor: t.color.ink,

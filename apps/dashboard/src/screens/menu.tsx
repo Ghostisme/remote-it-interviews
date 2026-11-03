@@ -44,6 +44,7 @@ export default function MenuScreen() {
   const [managingCategories, setManagingCategories] = useState(false);
   const [command, setCommand] = useState<{ item: MenuItem; action: MenuAction } | null>(null);
   const { width } = useWindowDimensions();
+  const compactFilters = width < 650;
   const columns = width >= 1400 ? 3 : width >= 1000 ? 2 : width >= 650 ? 2 : 1;
   const itemWidth = (contentWidth(width) - (columns - 1) * 20) / columns;
   const categories = query.data?.categories ?? [];
@@ -64,7 +65,7 @@ export default function MenuScreen() {
         title="A menu worth coming back for."
         subtitle="Your signature dishes. Every detail, just right."
         action={
-          <Row wrap>
+          <Row wrap style={{ maxWidth: "100%", flexShrink: 1 }}>
             <Button
               variant="secondary"
               icon={<FolderPlus size={15} color={t.color.ink} />}
@@ -94,7 +95,7 @@ export default function MenuScreen() {
               options={[
                 {
                   value: "active",
-                  label: "Active menu",
+                  label: compactFilters ? "Active" : "Active menu",
                   count: allItems.filter((item) => !item.archivedAt).length,
                 },
                 {
@@ -107,32 +108,35 @@ export default function MenuScreen() {
             <Button
               small
               variant="ghost"
+              label="Manage categories"
               icon={<SlidersHorizontal size={14} color={t.color.muted} />}
               onPress={() => setManagingCategories(true)}
               disabled={!query.data}
             >
-              Manage categories
+              {compactFilters ? undefined : "Manage categories"}
             </Button>
           </Row>
-          <Row wrap style={{ justifyContent: "space-between" }}>
-            <Tabs
-              value={category}
-              onChange={setCategory}
-              options={[
-                { value: "all", label: "All dishes", count: items.length },
-                ...categories.map((c) => ({
-                  value: c.id,
-                  label: c.name,
-                  count: items.filter((i) => i.categoryId === c.id).length,
-                })),
-              ]}
-            />
-            <Badge tone={view === "archived" ? "neutral" : "success"} dot>
-              {view === "archived"
-                ? "Hidden from new orders"
-                : `${items.filter((i) => i.available).length} available`}
-            </Badge>
-          </Row>
+          {!compactFilters ? (
+            <Row wrap style={{ justifyContent: "space-between" }}>
+              <Tabs
+                value={category}
+                onChange={setCategory}
+                options={[
+                  { value: "all", label: "All dishes", count: items.length },
+                  ...categories.map((c) => ({
+                    value: c.id,
+                    label: c.name,
+                    count: items.filter((i) => i.categoryId === c.id).length,
+                  })),
+                ]}
+              />
+              <Badge tone={view === "archived" ? "neutral" : "success"} dot>
+                {view === "archived"
+                  ? "Hidden from new orders"
+                  : `${items.filter((i) => i.available).length} available`}
+              </Badge>
+            </Row>
+          ) : null}
           <Row wrap style={{ borderTopWidth: 1, borderColor: t.color.line, paddingTop: 16 }}>
             <SearchField
               value={search}
@@ -140,16 +144,45 @@ export default function MenuScreen() {
               placeholder="Search your menu..."
               style={{ flex: 1, minWidth: 190 }}
             />
-            <Select
-              value={availability}
-              onChange={setAvailability}
-              options={[
-                { value: "all", label: "All availability" },
-                { value: "available", label: "Available" },
-                { value: "soldout", label: "Sold out" },
-              ]}
-            />
+            {!compactFilters ? (
+              <Select
+                value={availability}
+                onChange={setAvailability}
+                options={[
+                  { value: "all", label: "All availability" },
+                  { value: "available", label: "Available" },
+                  { value: "soldout", label: "Sold out" },
+                ]}
+              />
+            ) : null}
           </Row>
+          {compactFilters ? (
+            <Row style={{ alignItems: "flex-start" }}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Select
+                  label="Menu category"
+                  value={category}
+                  onChange={setCategory}
+                  options={[
+                    { value: "all", label: `All dishes (${items.length})` },
+                    ...categories.map((c) => ({ value: c.id, label: c.name })),
+                  ]}
+                />
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Select
+                  label="Availability"
+                  value={availability}
+                  onChange={setAvailability}
+                  options={[
+                    { value: "all", label: "All availability" },
+                    { value: "available", label: "Available" },
+                    { value: "soldout", label: "Sold out" },
+                  ]}
+                />
+              </View>
+            </Row>
+          ) : null}
         </Stack>
       </Card>
       {query.isPending ? (

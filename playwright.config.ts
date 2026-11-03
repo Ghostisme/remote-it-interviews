@@ -10,10 +10,22 @@ export default defineConfig({
   use: {
     baseURL: "http://localhost:8081",
     viewport: { width: 1440, height: 1050 },
-    browserName: "chromium",
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },
+  projects: [
+    { name: "desktop-chromium", use: { browserName: "chromium" } },
+    {
+      name: "mobile-webkit",
+      use: {
+        browserName: "webkit",
+        viewport: { width: 390, height: 844 },
+        deviceScaleFactor: 2,
+        isMobile: true,
+        hasTouch: true,
+      },
+    },
+  ],
   webServer: [
     {
       command: "pnpm dev:backend",

@@ -51,7 +51,7 @@ A useful three-minute walkthrough:
 6. Set **Accepting orders** off, then try checkout to see the business rule across pages. Restore it afterward.
 7. In **Menu → Edit**, archive a dish: it leaves the active menu and new-order picker. Open **Archived** to restore it or permanently delete an unused dish. A dish with past orders remains archived so history stays intact. **Manage categories** supports renaming, display order and deleting empty categories.
 
-Screenshots from the exported web build: [Menu](docs/screenshots/menu.png), [Orders](docs/screenshots/orders.png), [order details](docs/screenshots/order-detail.png), [CRM](docs/screenshots/crm.png), [Settings](docs/screenshots/settings.png), [UI Library](docs/screenshots/ui-library.png), and [mobile Menu](docs/screenshots/mobile-menu.png).
+Screenshots from the exported web build: [Menu](docs/screenshots/menu.png), [category management](docs/screenshots/categories.png), [Orders](docs/screenshots/orders.png), [order details](docs/screenshots/order-detail.png), [CRM](docs/screenshots/crm.png), [Settings](docs/screenshots/settings.png), [UI Library](docs/screenshots/ui-library.png), [mobile Menu](docs/screenshots/mobile-menu.png), and [mobile Orders](docs/screenshots/mobile-orders.png). Mobile captures use WebKit.
 
 ## Architecture
 
@@ -99,17 +99,18 @@ pnpm typecheck
 pnpm test
 pnpm gen:contract
 pnpm build
-pnpm exec playwright install chromium
+pnpm exec playwright install chromium webkit
 pnpm test:e2e
 ```
 
-Linux runners may need `pnpm exec playwright install --with-deps chromium`. Playwright starts both servers when needed and reuses running local servers outside CI.
+Linux runners may need `pnpm exec playwright install --with-deps chromium webkit`. Playwright starts both servers when needed and reuses running local servers outside CI. The suite runs every scenario in desktop Chromium and mobile WebKit with touch enabled. To review the exported production app, run `pnpm build`, keep the backend running, and use `pnpm preview` instead of the Expo dev server before starting the suite.
 
 | Check | Coverage |
 | --- | --- |
 | Backend: **10 tests** | Real PostgreSQL transactions, authoritative pricing, snapshots, availability/settings, invalid payloads, valid/conflicting actions, concurrent idempotency, CRM/summary aggregation, menu archiving/restoration, guarded deletion and category edits. |
 | Frontend logic: **5 tests** | Cart quantity limits/removal, integer-money parsing, rounded tax/delivery preview, unavailable-item/minimum-spend checks and archived basket items blocking checkout. |
-| Browser: **5 tests** | Complete menu → guest → settings → delivery → kitchen → CRM → revenue workflow; loading/empty/error/retry; nested dialog keyboard/focus; six phone routes; category editing, archive/restore/delete and preserved order history. |
+| Browser: **14 checks** | Seven scenarios in each of desktop Chromium and mobile WebKit: complete menu → guest → settings → delivery → kitchen → CRM → revenue workflow; loading/empty/error/retry; nested dialog keyboard/focus; six phone routes; category editing and dish lifecycle; all six loaded pages at seven widths; long content and small-screen dialogs. |
+| Responsive layout | Widths **320, 375, 390, 768, 1024, 1366 and 1600 px**, plus **320 × 400** dialog and **1366 × 600** sidebar checks. Controls are checked for clipping, including inside cards; navigation strips and wide tables intentionally scroll. The long-content case uses 80-character unbroken names and a large price. |
 | Build | Expo web export and Wrangler Worker deployment bundle in dry-run mode. |
 
 Backend tests migrate and reset only `odyssey_test`. Browser tests use the dedicated `odyssey` review database, remove only records they create, and restore the original settings in a `finally` block. Avoid editing settings manually while the browser suite runs. Traces and screenshots are retained on failure in ignored test output directories.
@@ -136,8 +137,8 @@ Scope choices for the assignment's 1–2 day target:
 - Opening hours/timezone are editable business information. The explicit accepting-orders switch controls checkout; scheduled closing and holiday exceptions are not implemented.
 - Item covers use a local curated gallery rather than an upload/storage service. Photo sources and the asset refresh script are documented in [image credits](apps/dashboard/public/images/README.md).
 - Orders refresh by polling and query invalidation. WebSockets and external job queues are unnecessary for this assessment's traffic.
-- Web is the verified target. UI primitives use React Native and the Expo project includes native platforms, but iOS/Android device builds were not tested.
+- Web is the verified target, including a touch-enabled mobile WebKit browser context. Physical iPhone/Android devices, WeChat's embedded browser and native app builds were not tested.
 
 ## AI-assisted implementation
 
-AI was used for planning, implementation, debugging and review, with the required stack and schema-to-client flow kept as fixed constraints. Review concentrated on generated contract consistency, server-owned money/state rules, transaction behavior, data isolation and reusable UI. Browser checks exposed and helped correct responsive grid widths, React Native Web ARIA state mapping, and nested-dialog focus restoration. Acceptance relied on real API/database and browser runs, including a completed order whose **$32.10** total appeared in both CRM spend and Home revenue.
+AI was used for planning, implementation, debugging and review, with the required stack and schema-to-client flow kept as fixed constraints. Review concentrated on generated contract consistency, server-owned money/state rules, transaction behavior, data isolation and reusable UI. Browser checks exposed and helped correct responsive grid widths, controls clipped within cards, React Native Web ARIA state mapping, and nested-dialog focus restoration. Mobile WebKit also exposed a focus race while a nested modal faded in and duplicate Escape handling; web dialogs now activate immediately and handle Escape once for the top dialog. Acceptance relied on real API/database and browser runs, including a completed order whose **$32.10** total appeared in both CRM spend and Home revenue.
