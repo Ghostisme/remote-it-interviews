@@ -12,6 +12,7 @@ const menu: MenuItem[] = [
     imageKey: "pasta",
     available: true,
     featured: false,
+    archivedAt: null,
     createdAt: "2026-01-01",
     updatedAt: "2026-01-01",
   },
@@ -66,5 +67,16 @@ describe("Order draft", () => {
     expect(parseMoney("0")).toBe(0);
     for (const value of ["12.999", "-1", "abc", "Infinity", "1e3", "10001"])
       expect(parseMoney(value)).toBeNull();
+  });
+  it("keeps archived dishes visible in an existing basket and blocks checkout", () => {
+    const preview = previewOrder(
+      { dish: 2 },
+      menu.map((item) => ({ ...item, archivedAt: "2026-11-04T00:00:00Z" })),
+      config,
+      "pickup",
+    );
+    expect(preview.unavailable).toBe(true);
+    expect(preview.lines).toHaveLength(1);
+    expect(preview.lines[0]?.quantity).toBe(2);
   });
 });

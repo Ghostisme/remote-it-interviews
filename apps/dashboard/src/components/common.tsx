@@ -283,19 +283,26 @@ export function FormActions({
   loading,
   label = "Save changes",
   disabled = false,
+  danger = false,
 }: {
   onClose: () => void;
   onSubmit: () => void;
   loading: boolean;
   label?: string;
   disabled?: boolean;
+  danger?: boolean;
 }) {
   return (
-    <Row style={{ justifyContent: "flex-end" }}>
+    <Row wrap style={{ justifyContent: "flex-end", maxWidth: "100%" }}>
       <Button variant="secondary" onPress={onClose} disabled={loading}>
         Cancel
       </Button>
-      <Button onPress={onSubmit} loading={loading} disabled={disabled}>
+      <Button
+        variant={danger ? "danger" : "primary"}
+        onPress={onSubmit}
+        loading={loading}
+        disabled={disabled}
+      >
         {label}
       </Button>
     </Row>

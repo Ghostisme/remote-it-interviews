@@ -36,7 +36,7 @@ For an existing PostgreSQL server, create dedicated databases named `odyssey` an
 | --- | --- |
 | **Home** `/` | Live revenue and order metrics, previous-period comparison, interactive daily chart, 7/14/30-day reporting, popular dishes, recent order details, service status. |
 | **Orders** `/orders` | Search, status/date filters, pagination, customer selection, item quantities, pickup/delivery/dine-in, checkout, pricing breakdown, order details, action buttons and event history. |
-| **Menu** `/menu` | Category creation/filtering, search, availability filtering, menu item creation/editing, curated image selection, prices and availability toggles. |
+| **Menu** `/menu` | Create/rename/reorder categories, delete empty categories, search/filter, create/edit dishes, curated covers, prices/availability, archive/restore and guarded permanent deletion. |
 | **CRM** `/crm` | Searchable customer list, pagination, create/edit profiles, notes, order counts, completed spend, recent history and links to individual orders. |
 | **Settings** `/settings` | Restaurant profile, accepting orders, auto-accept, service availability, preparation time, minimum order, delivery fee, tax, hours and timezone; validation, save and discard. |
 | **UI Library** `/ui-library` | Color/spacing/type/surface tokens, reusable controls, badges, dialogs, tables, skeletons, empty/error/success states and interactive feedback. |
@@ -49,6 +49,7 @@ A useful three-minute walkthrough:
 4. Open the order and use **Accept order → Start preparing → Mark ready → Complete order**. The timeline records each action. Cancellation is available only for active orders and requires a reason.
 5. Open the guest's CRM profile: the completed order contributes to spend. Follow its history entry back to the order. On **Home**, completed revenue and the recent-orders list reflect the same transaction.
 6. Set **Accepting orders** off, then try checkout to see the business rule across pages. Restore it afterward.
+7. In **Menu → Edit**, archive a dish: it leaves the active menu and new-order picker. Open **Archived** to restore it or permanently delete an unused dish. A dish with past orders remains archived so history stays intact. **Manage categories** supports renaming, display order and deleting empty categories.
 
 Screenshots from the exported web build: [Menu](docs/screenshots/menu.png), [Orders](docs/screenshots/orders.png), [order details](docs/screenshots/order-detail.png), [CRM](docs/screenshots/crm.png), [Settings](docs/screenshots/settings.png), [UI Library](docs/screenshots/ui-library.png), and [mobile Menu](docs/screenshots/mobile-menu.png).
 
@@ -85,6 +86,7 @@ The design system centralizes a warm green/orange palette, DM Sans/DM Serif Disp
 - **Validation:** unavailable items, paused ordering, disabled services, insufficient subtotal, invalid quantities and missing delivery addresses are rejected. Constraint and validation errors have typed responses and a request ID.
 - **State:** `pending → accepted → preparing → ready → completed`. Auto-accept starts at `accepted`. Only active orders can be cancelled. Responses contain allowed actions; commands use row locks and an expected version, so stale actions return a conflict rather than overwriting another operator.
 - **Retries:** order creation requires an idempotency key. A transaction-scoped advisory lock serializes retries; an identical request returns the existing order, while the same key with different content returns a conflict.
+- **Menu lifecycle:** archiving removes a dish from new ordering without changing historical names, prices or totals. Restoring preserves its previous availability. Permanent deletion requires an archived dish with no order references; a row lock prevents racing a new order. Category edits preserve IDs and dish links; category deletion requires no active or archived dishes.
 - **Reporting:** daily Home reporting uses UTC and completed orders; revenue includes their tax and delivery fees. Popular-item revenue counts food lines only. Period metrics compare with the immediately preceding equal-length period; active orders and total customers are all-time counts. CRM spend counts completed orders, and order count excludes cancellations. Order timestamps are displayed in the browser's local time.
 
 ## Checks
@@ -105,9 +107,9 @@ Linux runners may need `pnpm exec playwright install --with-deps chromium`. Play
 
 | Check | Coverage |
 | --- | --- |
-| Backend: **8 tests** | Real PostgreSQL transactions, authoritative prices/tax/fees, snapshots, availability and settings, invalid payloads, legal/conflicting actions, concurrent idempotency, CRM/summary aggregation. |
-| Frontend logic: **4 tests** | Cart quantity limits/removal, integer-money parsing, rounded tax/delivery preview, unavailable-item and minimum-spend checks. |
-| Browser: **4 tests** | Complete menu → guest → settings → delivery → kitchen → CRM → revenue workflow; loading/empty/error/retry states; nested dialog keyboard/focus behavior; all six routes and dialogs on a 390px viewport. |
+| Backend: **10 tests** | Real PostgreSQL transactions, authoritative pricing, snapshots, availability/settings, invalid payloads, valid/conflicting actions, concurrent idempotency, CRM/summary aggregation, menu archiving/restoration, guarded deletion and category edits. |
+| Frontend logic: **5 tests** | Cart quantity limits/removal, integer-money parsing, rounded tax/delivery preview, unavailable-item/minimum-spend checks and archived basket items blocking checkout. |
+| Browser: **5 tests** | Complete menu → guest → settings → delivery → kitchen → CRM → revenue workflow; loading/empty/error/retry; nested dialog keyboard/focus; six phone routes; category editing, archive/restore/delete and preserved order history. |
 | Build | Expo web export and Wrangler Worker deployment bundle in dry-run mode. |
 
 Backend tests migrate and reset only `odyssey_test`. Browser tests use the dedicated `odyssey` review database, remove only records they create, and restore the original settings in a `finally` block. Avoid editing settings manually while the browser suite runs. Traces and screenshots are retained on failure in ignored test output directories.

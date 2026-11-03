@@ -149,6 +149,7 @@ export function NewOrderDialog({
                   placeholder="Find a dish"
                 />
                 {draft.menu.data.items
+                  .filter((item) => !item.archivedAt)
                   .filter((item) =>
                     `${item.name} ${item.description}`
                       .toLowerCase()
@@ -222,12 +223,16 @@ export function NewOrderDialog({
                           <Button
                             small
                             variant="secondary"
-                            disabled={quantity >= 99}
+                            disabled={quantity >= 99 || !item.available || !!item.archivedAt}
                             label={`Add one ${item.name}`}
                             icon={<Plus size={12} color={t.color.muted} />}
                             onPress={() => draft.adjust(item.id, 1)}
                           />
-                          {!item.available ? <Badge tone="danger">Sold out</Badge> : null}
+                          {item.archivedAt ? (
+                            <Badge tone="danger">Archived — remove to continue</Badge>
+                          ) : !item.available ? (
+                            <Badge tone="danger">Sold out</Badge>
+                          ) : null}
                         </Row>
                       </Stack>
                     ))

@@ -34,7 +34,8 @@ export function useOrderDraft(onCreated: (id: string) => void) {
     setError("");
     if (!customerId) return setError("Choose a customer for this order.");
     if (!preview?.lines.length) return setError("Add at least one item to the order.");
-    if (preview.unavailable) return setError("Remove sold-out items before placing this order.");
+    if (preview.unavailable)
+      return setError("Remove sold-out or archived dishes before placing this order.");
     if (fulfillment === "delivery" && !address.trim()) return setError("Enter a delivery address.");
     const content = {
       customerId,

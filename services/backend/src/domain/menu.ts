@@ -78,7 +78,7 @@ export async function deleteCategory(db: Database, id: string) {
         409,
         "CATEGORY_NOT_EMPTY",
         active
-          ? `Move or archive the ${active} ${active === 1 ? "dish" : "dishes"} in ${category.name} first.`
+          ? `Move all dishes in ${category.name}, including archived dishes, to another category first.`
           : `${category.name} still holds archived dishes that keep order history intact.`,
       );
     await tx.delete(categories).where(eq(categories.id, id));

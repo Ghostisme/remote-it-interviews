@@ -25,7 +25,7 @@ export function previewOrder(
     tax,
     delivery,
     total: subtotal + tax + delivery,
-    unavailable: lines.some((line) => !line.item.available),
+    unavailable: lines.some((line) => !line.item.available || !!line.item.archivedAt),
     belowMinimum: subtotal < config.minimumOrderCents,
   };
 }

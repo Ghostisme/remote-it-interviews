@@ -15,12 +15,22 @@ import {
   Txt,
   tokens as t,
 } from "@odyssey/ui";
-import { FolderPlus, Pencil, Plus, Sparkles } from "lucide-react-native";
+import {
+  FolderPlus,
+  Pencil,
+  Plus,
+  RotateCcw,
+  SlidersHorizontal,
+  Sparkles,
+  Trash2,
+} from "lucide-react-native";
 import { useState } from "react";
 import { useWindowDimensions, View } from "react-native";
 import { contentWidth, FoodImage, PageHeading, QueryError, Tabs } from "../components/common";
 import { CategoryDialog, MenuItemDialog } from "../components/menu-dialogs";
+import { CategoryManagerDialog, MenuLifecycleDialog } from "../components/menu-management-dialogs";
 import { useMenuActions } from "../features/menu/use-menu-form";
+import type { MenuAction } from "../features/menu/use-menu-management";
 
 export default function MenuScreen() {
   const query = useGetMenu();
@@ -28,13 +38,19 @@ export default function MenuScreen() {
   const [category, setCategory] = useState("all");
   const [search, setSearch] = useState("");
   const [availability, setAvailability] = useState("all");
+  const [view, setView] = useState("active");
   const [editing, setEditing] = useState<MenuItem | "new" | null>(null);
   const [addingCategory, setAddingCategory] = useState(false);
+  const [managingCategories, setManagingCategories] = useState(false);
+  const [command, setCommand] = useState<{ item: MenuItem; action: MenuAction } | null>(null);
   const { width } = useWindowDimensions();
   const columns = width >= 1400 ? 3 : width >= 1000 ? 2 : width >= 650 ? 2 : 1;
   const itemWidth = (contentWidth(width) - (columns - 1) * 20) / columns;
   const categories = query.data?.categories ?? [];
-  const items = query.data?.items ?? [];
+  const allItems = query.data?.items ?? [];
+  const items = allItems.filter((item) =>
+    view === "archived" ? !!item.archivedAt : !item.archivedAt,
+  );
   const filtered = items.filter(
     (item) =>
       (category === "all" || item.categoryId === category) &&
@@ -70,6 +86,36 @@ export default function MenuScreen() {
         <Stack gap={16}>
           <Row wrap style={{ justifyContent: "space-between" }}>
             <Tabs
+              value={view}
+              onChange={(value) => {
+                setView(value);
+                setAvailability("all");
+              }}
+              options={[
+                {
+                  value: "active",
+                  label: "Active menu",
+                  count: allItems.filter((item) => !item.archivedAt).length,
+                },
+                {
+                  value: "archived",
+                  label: "Archived",
+                  count: allItems.filter((item) => item.archivedAt).length,
+                },
+              ]}
+            />
+            <Button
+              small
+              variant="ghost"
+              icon={<SlidersHorizontal size={14} color={t.color.muted} />}
+              onPress={() => setManagingCategories(true)}
+              disabled={!query.data}
+            >
+              Manage categories
+            </Button>
+          </Row>
+          <Row wrap style={{ justifyContent: "space-between" }}>
+            <Tabs
               value={category}
               onChange={setCategory}
               options={[
@@ -81,8 +127,10 @@ export default function MenuScreen() {
                 })),
               ]}
             />
-            <Badge tone="success" dot>
-              {items.filter((i) => i.available).length} available
+            <Badge tone={view === "archived" ? "neutral" : "success"} dot>
+              {view === "archived"
+                ? "Hidden from new orders"
+                : `${items.filter((i) => i.available).length} available`}
             </Badge>
           </Row>
           <Row wrap style={{ borderTopWidth: 1, borderColor: t.color.line, paddingTop: 16 }}>
@@ -114,9 +162,15 @@ export default function MenuScreen() {
             title={
               search || category !== "all" || availability !== "all"
                 ? "No dishes found"
-                : "Your menu starts here"
+                : view === "archived"
+                  ? "No archived dishes"
+                  : "Your menu starts here"
             }
-            message="Try another filter, or add something delicious to the menu."
+            message={
+              view === "archived"
+                ? "Archived dishes stay here for safekeeping. You can restore them whenever you're ready."
+                : "Try another filter, or add something delicious to the menu."
+            }
             action={
               <Button
                 variant="secondary"
@@ -124,10 +178,17 @@ export default function MenuScreen() {
                   setCategory("all");
                   setSearch("");
                   setAvailability("all");
-                  if (!items.length) setEditing("new");
+                  if (!items.length) {
+                    if (view === "archived") setView("active");
+                    else setEditing("new");
+                  }
                 }}
               >
-                {items.length ? "Clear filters" : "Add your first dish"}
+                {items.length
+                  ? "Clear filters"
+                  : view === "archived"
+                    ? "Back to active menu"
+                    : "Add your first dish"}
               </Button>
             }
           />
@@ -139,8 +200,18 @@ export default function MenuScreen() {
               <Card padding={0} style={{ overflow: "hidden", flex: 1 }}>
                 <View>
                   <FoodImage imageKey={item.imageKey} height={195} radius={0} />
-                  <View style={{ position: "absolute", top: 14, left: 14 }}>
-                    {item.featured ? (
+                  <View
+                    style={{
+                      position: "absolute",
+                      top: 14,
+                      left: 14,
+                      right: 14,
+                      alignItems: "flex-start",
+                    }}
+                  >
+                    {item.archivedAt ? (
+                      <Badge tone="neutral">Archived</Badge>
+                    ) : item.featured ? (
                       <Badge tone="brand">
                         <Sparkles size={10} color={t.color.brand} /> Chef's pick
                       </Badge>
@@ -150,7 +221,7 @@ export default function MenuScreen() {
                       </Badge>
                     )}
                   </View>
-                  {!item.available ? (
+                  {!item.available && !item.archivedAt ? (
                     <View style={{ position: "absolute", bottom: 14, right: 14 }}>
                       <Badge tone="danger">Sold out</Badge>
                     </View>
@@ -169,6 +240,7 @@ export default function MenuScreen() {
                     {item.description || "Made fresh, with a little extra care."}
                   </Txt>
                   <Row
+                    wrap
                     style={{
                       marginTop: "auto",
                       paddingTop: 14,
@@ -177,19 +249,40 @@ export default function MenuScreen() {
                       justifyContent: "space-between",
                     }}
                   >
-                    <Row gap={7}>
-                      <Toggle
-                        label="Available"
-                        value={item.available}
-                        onChange={() => {
-                          void actions.toggle(item);
-                        }}
-                        disabled={actions.toggling}
-                      />
-                      <Txt size={11} color={t.color.muted}>
-                        {item.available ? "Available" : "Sold out"}
-                      </Txt>
-                    </Row>
+                    {item.archivedAt ? (
+                      <Row gap={6}>
+                        <Button
+                          small
+                          variant="secondary"
+                          label={`Restore ${item.name}`}
+                          icon={<RotateCcw size={13} color={t.color.brand} />}
+                          onPress={() => setCommand({ item, action: "restore" })}
+                        >
+                          Restore
+                        </Button>
+                        <Button
+                          small
+                          variant="ghost"
+                          label={`Delete ${item.name}`}
+                          icon={<Trash2 size={14} color={t.color.danger} />}
+                          onPress={() => setCommand({ item, action: "delete" })}
+                        />
+                      </Row>
+                    ) : (
+                      <Row gap={7}>
+                        <Toggle
+                          label="Available"
+                          value={item.available}
+                          onChange={() => {
+                            void actions.toggle(item);
+                          }}
+                          disabled={actions.toggling}
+                        />
+                        <Txt size={11} color={t.color.muted}>
+                          {item.available ? "Available" : "Sold out"}
+                        </Txt>
+                      </Row>
+                    )}
                     <Button
                       small
                       variant="secondary"
@@ -215,6 +308,14 @@ export default function MenuScreen() {
           categories={categories}
           item={editing === "new" ? undefined : editing}
           onClose={() => setEditing(null)}
+          onArchive={
+            editing === "new"
+              ? undefined
+              : () => {
+                  setEditing(null);
+                  setCommand({ item: editing, action: "archive" });
+                }
+          }
         />
       ) : null}
       {addingCategory ? (
@@ -222,6 +323,23 @@ export default function MenuScreen() {
           onClose={() => setAddingCategory(false)}
           onSave={actions.addCategory}
           saving={actions.adding}
+        />
+      ) : null}
+      {managingCategories ? (
+        <CategoryManagerDialog
+          categories={categories}
+          items={allItems}
+          onClose={() => {
+            setManagingCategories(false);
+            if (!categories.some((item) => item.id === category)) setCategory("all");
+          }}
+        />
+      ) : null}
+      {command ? (
+        <MenuLifecycleDialog
+          item={command.item}
+          action={command.action}
+          onClose={() => setCommand(null)}
         />
       ) : null}
     </Stack>

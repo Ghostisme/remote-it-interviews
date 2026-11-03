@@ -3,6 +3,7 @@ import type { Category, CreateMenuItem, MenuItem } from "@odyssey/types";
 import {
   Badge,
   Banner,
+  Button,
   Dialog,
   Field,
   Interactive,
@@ -13,7 +14,7 @@ import {
   Txt,
   tokens as t,
 } from "@odyssey/ui";
-import { Check } from "lucide-react-native";
+import { Archive, Check } from "lucide-react-native";
 import { useState } from "react";
 import { useMenuForm } from "../features/menu/use-menu-form";
 import { FoodImage, FormActions, titleCase } from "./common";
@@ -22,10 +23,12 @@ export function MenuItemDialog({
   categories,
   item,
   onClose,
+  onArchive,
 }: {
   categories: Category[];
   item?: MenuItem;
   onClose: () => void;
+  onArchive?: () => void;
 }) {
   const form = useMenuForm(categories, item, onClose);
   return (
@@ -42,12 +45,24 @@ export function MenuItemDialog({
         if (!form.saving) onClose();
       }}
       footer={
-        <FormActions
-          onClose={onClose}
-          onSubmit={form.save}
-          loading={form.saving}
-          label={item ? "Save menu item" : "Add menu item"}
-        />
+        <Row wrap style={{ flex: 1, justifyContent: "space-between" }}>
+          {item && !item.archivedAt && onArchive ? (
+            <Button
+              variant="ghost"
+              icon={<Archive size={15} color={t.color.muted} />}
+              onPress={onArchive}
+              disabled={form.saving}
+            >
+              Archive dish
+            </Button>
+          ) : null}
+          <FormActions
+            onClose={onClose}
+            onSubmit={form.save}
+            loading={form.saving}
+            label={item ? "Save menu item" : "Add menu item"}
+          />
+        </Row>
       }
     >
       <Stack gap={20}>
@@ -70,8 +85,8 @@ export function MenuItemDialog({
               multiline
               maxLength={600}
             />
-            <Row style={{ alignItems: "flex-start" }}>
-              <Stack style={{ flex: 1 }}>
+            <Row wrap style={{ alignItems: "flex-start" }}>
+              <Stack style={{ flex: 1, minWidth: 130 }}>
                 <Field
                   label="Price (USD)"
                   placeholder="14.50"
@@ -80,7 +95,7 @@ export function MenuItemDialog({
                   keyboardType="decimal-pad"
                 />
               </Stack>
-              <Stack style={{ flex: 1 }}>
+              <Stack style={{ flex: 1, minWidth: 130 }}>
                 <Select
                   label="Category"
                   value={form.categoryId}
@@ -94,7 +109,12 @@ export function MenuItemDialog({
               value={form.available}
               onChange={form.setAvailable}
             />
-            <Toggle label="Feature this dish" value={form.featured} onChange={form.setFeatured} />
+            <Toggle
+              label="Feature this dish"
+              value={form.featured}
+              onChange={form.setFeatured}
+              disabled={!!item?.archivedAt}
+            />
             <Txt size={11} color={t.color.muted}>
               Sold-out dishes stay visible in your menu, but cannot be ordered.
             </Txt>
@@ -147,20 +167,26 @@ export function MenuItemDialog({
 }
 
 export function CategoryDialog({
+  category,
   onClose,
   onSave,
   saving,
 }: {
+  category?: Category;
   onClose: () => void;
-  onSave: (name: string) => Promise<unknown>;
+  onSave: (name: string, sortOrder?: number) => Promise<unknown>;
   saving: boolean;
 }) {
-  const [name, setName] = useState("");
+  const [name, setName] = useState(category?.name ?? "");
+  const [sortOrder, setSortOrder] = useState(String(category?.sortOrder ?? 0));
   const [error, setError] = useState("");
   const submit = async () => {
+    setError("");
     if (name.trim().length < 2) return setError("Use at least 2 characters for the category name.");
+    if (!/^\d{1,3}$/.test(sortOrder))
+      return setError("Display order must be a whole number between 0 and 999.");
     try {
-      await onSave(name);
+      await onSave(name, Number(sortOrder));
       onClose();
     } catch (e) {
       setError(errorMessage(e));
@@ -169,13 +195,18 @@ export function CategoryDialog({
   return (
     <Dialog
       visible
-      title="Make room for more"
+      title={category ? "Refine your category" : "Make room for more"}
       subtitle="A category helps guests find their next favorite."
       onClose={() => {
         if (!saving) onClose();
       }}
       footer={
-        <FormActions onClose={onClose} onSubmit={submit} loading={saving} label="Create category" />
+        <FormActions
+          onClose={onClose}
+          onSubmit={submit}
+          loading={saving}
+          label={category ? "Save category" : "Create category"}
+        />
       }
     >
       <Stack>
@@ -188,6 +219,16 @@ export function CategoryDialog({
           maxLength={80}
           autoFocus
         />
+        {category ? (
+          <Field
+            label="Display order"
+            value={sortOrder}
+            onChangeText={setSortOrder}
+            keyboardType="number-pad"
+            maxLength={3}
+            hint="0–999. Lower numbers appear first; ties are sorted by name."
+          />
+        ) : null}
       </Stack>
     </Dialog>
   );
