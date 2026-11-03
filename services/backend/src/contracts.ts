@@ -24,9 +24,20 @@ export const CreateCategory = createInsertSchema(categories, { name })
   .pick({ name: true })
   .strict()
   .openapi("CreateCategory");
-export const MenuItem = createSelectSchema(menuItems, { createdAt: date, updatedAt: date }).openapi(
-  "MenuItem",
-);
+export const UpdateCategory = createInsertSchema(categories, {
+  name,
+  sortOrder: z.number().int().min(0).max(999),
+})
+  .pick({ name: true, sortOrder: true })
+  .partial()
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, "Provide at least one field")
+  .openapi("UpdateCategory");
+export const MenuItem = createSelectSchema(menuItems, {
+  createdAt: date,
+  updatedAt: date,
+  archivedAt: date.nullable(),
+}).openapi("MenuItem");
 export const CreateMenuItem = createInsertSchema(menuItems, {
   name,
   description: z.string().trim().max(600).optional(),
@@ -46,7 +57,7 @@ export const CreateMenuItem = createInsertSchema(menuItems, {
     "bread",
   ]),
 })
-  .omit({ id: true, createdAt: true, updatedAt: true })
+  .omit({ id: true, archivedAt: true, createdAt: true, updatedAt: true })
   .strict()
   .openapi("CreateMenuItem");
 export const UpdateMenuItem = CreateMenuItem.partial()

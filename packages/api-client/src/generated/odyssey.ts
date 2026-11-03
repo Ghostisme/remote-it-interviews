@@ -45,6 +45,7 @@ import type {
   OrderList,
   Settings,
   Summary,
+  UpdateCategory,
   UpdateCustomer,
   UpdateMenuItem,
   UpdateSettings
@@ -374,6 +375,129 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       return useMutation(getCreateCategoryMutationOptions(options), queryClient);
     }
 
+export const updateCategory = (
+    id: string,
+    updateCategoryBody: BodyType<UpdateCategory>,
+ options?: SecondParameter<typeof apiRequest>,signal?: AbortSignal
+) => {
+
+
+      return apiRequest<Category>(
+      {url: `/api/categories/${id}`, method: 'PATCH',
+      headers: {'Content-Type': 'application/json', },
+      data: updateCategoryBody, signal
+    },
+      options);
+    }
+
+
+
+
+export const getUpdateCategoryMutationKey = () => ['updateCategory'] as const;
+
+export const getUpdateCategoryMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCategory>>, TError,UpdateCategoryMutationVariables, TContext>, request?: SecondParameter<typeof apiRequest>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateCategory>>, TError,UpdateCategoryMutationVariables, TContext> => {
+
+const mutationKey = getUpdateCategoryMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateCategory>>, UpdateCategoryMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateCategory(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateCategoryMutationResult = NonNullable<Awaited<ReturnType<typeof updateCategory>>>
+    export type UpdateCategoryMutationBody = BodyType<UpdateCategory>
+    export type UpdateCategoryMutationError = ErrorType<ApiError>
+    export type UpdateCategoryMutationVariables = {id: string;data: BodyType<UpdateCategory>}
+
+    export const useUpdateCategory = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCategory>>, TError,UpdateCategoryMutationVariables, TContext>, request?: SecondParameter<typeof apiRequest>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updateCategory>>,
+        TError,
+        UpdateCategoryMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateCategoryMutationOptions(options), queryClient);
+    }
+
+export const deleteCategory = (
+    id: string,
+ options?: SecondParameter<typeof apiRequest>,signal?: AbortSignal
+) => {
+
+
+      return apiRequest<void>(
+      {url: `/api/categories/${id}`, method: 'DELETE', signal
+    },
+      options);
+    }
+
+
+
+
+export const getDeleteCategoryMutationKey = () => ['deleteCategory'] as const;
+
+export const getDeleteCategoryMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCategory>>, TError,DeleteCategoryMutationVariables, TContext>, request?: SecondParameter<typeof apiRequest>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteCategory>>, TError,DeleteCategoryMutationVariables, TContext> => {
+
+const mutationKey = getDeleteCategoryMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteCategory>>, DeleteCategoryMutationVariables> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteCategory(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteCategoryMutationResult = NonNullable<Awaited<ReturnType<typeof deleteCategory>>>
+
+    export type DeleteCategoryMutationError = ErrorType<ApiError>
+    export type DeleteCategoryMutationVariables = {id: string}
+
+    export const useDeleteCategory = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCategory>>, TError,DeleteCategoryMutationVariables, TContext>, request?: SecondParameter<typeof apiRequest>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deleteCategory>>,
+        TError,
+        DeleteCategoryMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteCategoryMutationOptions(options), queryClient);
+    }
+
 export const updateMenuItem = (
     id: string,
     updateMenuItemBody: BodyType<UpdateMenuItem>,
@@ -435,6 +559,186 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getUpdateMenuItemMutationOptions(options), queryClient);
+    }
+
+export const deleteMenuItem = (
+    id: string,
+ options?: SecondParameter<typeof apiRequest>,signal?: AbortSignal
+) => {
+
+
+      return apiRequest<void>(
+      {url: `/api/menu/${id}`, method: 'DELETE', signal
+    },
+      options);
+    }
+
+
+
+
+export const getDeleteMenuItemMutationKey = () => ['deleteMenuItem'] as const;
+
+export const getDeleteMenuItemMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteMenuItem>>, TError,DeleteMenuItemMutationVariables, TContext>, request?: SecondParameter<typeof apiRequest>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteMenuItem>>, TError,DeleteMenuItemMutationVariables, TContext> => {
+
+const mutationKey = getDeleteMenuItemMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteMenuItem>>, DeleteMenuItemMutationVariables> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteMenuItem(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteMenuItemMutationResult = NonNullable<Awaited<ReturnType<typeof deleteMenuItem>>>
+
+    export type DeleteMenuItemMutationError = ErrorType<ApiError>
+    export type DeleteMenuItemMutationVariables = {id: string}
+
+    export const useDeleteMenuItem = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteMenuItem>>, TError,DeleteMenuItemMutationVariables, TContext>, request?: SecondParameter<typeof apiRequest>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deleteMenuItem>>,
+        TError,
+        DeleteMenuItemMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteMenuItemMutationOptions(options), queryClient);
+    }
+
+export const archiveMenuItem = (
+    id: string,
+ options?: SecondParameter<typeof apiRequest>,signal?: AbortSignal
+) => {
+
+
+      return apiRequest<MenuItem>(
+      {url: `/api/menu/${id}/archive`, method: 'POST', signal
+    },
+      options);
+    }
+
+
+
+
+export const getArchiveMenuItemMutationKey = () => ['archiveMenuItem'] as const;
+
+export const getArchiveMenuItemMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof archiveMenuItem>>, TError,ArchiveMenuItemMutationVariables, TContext>, request?: SecondParameter<typeof apiRequest>}
+): UseMutationOptions<Awaited<ReturnType<typeof archiveMenuItem>>, TError,ArchiveMenuItemMutationVariables, TContext> => {
+
+const mutationKey = getArchiveMenuItemMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof archiveMenuItem>>, ArchiveMenuItemMutationVariables> = (props) => {
+          const {id} = props ?? {};
+
+          return  archiveMenuItem(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ArchiveMenuItemMutationResult = NonNullable<Awaited<ReturnType<typeof archiveMenuItem>>>
+
+    export type ArchiveMenuItemMutationError = ErrorType<ApiError>
+    export type ArchiveMenuItemMutationVariables = {id: string}
+
+    export const useArchiveMenuItem = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof archiveMenuItem>>, TError,ArchiveMenuItemMutationVariables, TContext>, request?: SecondParameter<typeof apiRequest>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof archiveMenuItem>>,
+        TError,
+        ArchiveMenuItemMutationVariables,
+        TContext
+      > => {
+      return useMutation(getArchiveMenuItemMutationOptions(options), queryClient);
+    }
+
+export const restoreMenuItem = (
+    id: string,
+ options?: SecondParameter<typeof apiRequest>,signal?: AbortSignal
+) => {
+
+
+      return apiRequest<MenuItem>(
+      {url: `/api/menu/${id}/restore`, method: 'POST', signal
+    },
+      options);
+    }
+
+
+
+
+export const getRestoreMenuItemMutationKey = () => ['restoreMenuItem'] as const;
+
+export const getRestoreMenuItemMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof restoreMenuItem>>, TError,RestoreMenuItemMutationVariables, TContext>, request?: SecondParameter<typeof apiRequest>}
+): UseMutationOptions<Awaited<ReturnType<typeof restoreMenuItem>>, TError,RestoreMenuItemMutationVariables, TContext> => {
+
+const mutationKey = getRestoreMenuItemMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof restoreMenuItem>>, RestoreMenuItemMutationVariables> = (props) => {
+          const {id} = props ?? {};
+
+          return  restoreMenuItem(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RestoreMenuItemMutationResult = NonNullable<Awaited<ReturnType<typeof restoreMenuItem>>>
+
+    export type RestoreMenuItemMutationError = ErrorType<ApiError>
+    export type RestoreMenuItemMutationVariables = {id: string}
+
+    export const useRestoreMenuItem = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof restoreMenuItem>>, TError,RestoreMenuItemMutationVariables, TContext>, request?: SecondParameter<typeof apiRequest>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof restoreMenuItem>>,
+        TError,
+        RestoreMenuItemMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRestoreMenuItemMutationOptions(options), queryClient);
     }
 
 export const getCustomers = (

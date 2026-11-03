@@ -49,6 +49,7 @@ export * from './settings';
 export * from './summary';
 export * from './summaryDailyItem';
 export * from './summaryPopularItemsItem';
+export * from './updateCategory';
 export * from './updateCustomer';
 export * from './updateMenuItem';
 export * from './updateMenuItemImageKey';

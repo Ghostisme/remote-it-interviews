@@ -19,6 +19,8 @@ export interface MenuItem {
   imageKey: string;
   available: boolean;
   featured: boolean;
+  /** @nullable */
+  archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }

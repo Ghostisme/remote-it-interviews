@@ -6,6 +6,7 @@ import * as C from "./contracts";
 import { connectDatabase, type Database } from "./db/client";
 import { categories, customers, menuItems, settings } from "./db/schema";
 import { DomainError } from "./domain/errors";
+import { deleteCategory, deleteMenuItem, setMenuItemArchived, updateCategory } from "./domain/menu";
 import { applyOrderAction, createOrder, orderDetail } from "./domain/orders";
 import {
   customerDetail,
@@ -69,7 +70,7 @@ export function createApp(database?: Database) {
           .includes(origin)
           ? origin
           : undefined,
-      allowMethods: ["GET", "POST", "PATCH", "OPTIONS"],
+      allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
       allowHeaders: ["Content-Type"],
       exposeHeaders: ["X-Request-Id"],
     }),
@@ -207,6 +208,32 @@ export function createApp(database?: Database) {
   );
   app.openapi(
     createRoute({
+      method: "patch",
+      path: "/api/categories/{id}",
+      operationId: "updateCategory",
+      tags: ["Menu"],
+      request: { params: C.IdParam, body: body(C.UpdateCategory) },
+      responses: { 200: json(C.Category, "Category updated"), ...errors },
+    }),
+    async (c) =>
+      c.json(await updateCategory(c.get("db"), c.req.valid("param").id, c.req.valid("json")), 200),
+  );
+  app.openapi(
+    createRoute({
+      method: "delete",
+      path: "/api/categories/{id}",
+      operationId: "deleteCategory",
+      tags: ["Menu"],
+      request: { params: C.IdParam },
+      responses: { 204: { description: "Empty category deleted" }, ...errors },
+    }),
+    async (c) => {
+      await deleteCategory(c.get("db"), c.req.valid("param").id);
+      return c.body(null, 204);
+    },
+  );
+  app.openapi(
+    createRoute({
       method: "post",
       path: "/api/menu",
       operationId: "createMenuItem",
@@ -237,6 +264,50 @@ export function createApp(database?: Database) {
         .returning();
       if (!row) throw new DomainError(404, "ITEM_NOT_FOUND", "This menu item could not be found.");
       return c.json(serialize(row), 200);
+    },
+  );
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/api/menu/{id}/archive",
+      operationId: "archiveMenuItem",
+      tags: ["Menu"],
+      request: { params: C.IdParam },
+      responses: { 200: json(C.MenuItem, "Removed from ordering; history kept"), ...errors },
+    }),
+    async (c) =>
+      c.json(serialize(await setMenuItemArchived(c.get("db"), c.req.valid("param").id, true)), 200),
+  );
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/api/menu/{id}/restore",
+      operationId: "restoreMenuItem",
+      tags: ["Menu"],
+      request: { params: C.IdParam },
+      responses: { 200: json(C.MenuItem, "Returned to the active menu"), ...errors },
+    }),
+    async (c) =>
+      c.json(
+        serialize(await setMenuItemArchived(c.get("db"), c.req.valid("param").id, false)),
+        200,
+      ),
+  );
+  app.openapi(
+    createRoute({
+      method: "delete",
+      path: "/api/menu/{id}",
+      operationId: "deleteMenuItem",
+      tags: ["Menu"],
+      request: { params: C.IdParam },
+      responses: {
+        204: { description: "Archived dish without order history deleted" },
+        ...errors,
+      },
+    }),
+    async (c) => {
+      await deleteMenuItem(c.get("db"), c.req.valid("param").id);
+      return c.body(null, 204);
     },
   );
   app.openapi(

@@ -142,6 +142,12 @@ export async function createOrder(db: Database, input: CreateOrderInput) {
     const byId = new Map(items.map((item) => [item.id, item]));
     const lines = input.items.map((line) => {
       const item = byId.get(line.menuItemId);
+      if (item?.archivedAt)
+        throw new DomainError(
+          409,
+          "ITEM_ARCHIVED",
+          `${item.name} is no longer on the menu. Please remove it from the order.`,
+        );
       if (!item?.available)
         throw new DomainError(
           409,

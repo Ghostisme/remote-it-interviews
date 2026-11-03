@@ -58,6 +58,7 @@ export const menuItems = pgTable(
     imageKey: text("image_key").notNull().default("salad"),
     available: boolean("available").notNull().default(true),
     featured: boolean("featured").notNull().default(false),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
     ...timestamps,
   },
   (t) => [

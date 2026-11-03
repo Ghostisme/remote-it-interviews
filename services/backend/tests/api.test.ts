@@ -176,6 +176,53 @@ describe("PostgreSQL-backed restaurant API", () => {
     expect(summary.revenueCents).toBe(2812);
     expect(summary.daily).toHaveLength(7);
   });
+  it("archives dishes out of ordering and only deletes them without order history", async () => {
+    expect((await request(`/api/menu/${itemId}`, "DELETE")).status).toBe(409);
+    await request("/api/orders", "POST", input());
+    const archived = C.MenuItem.parse(
+      await (await request(`/api/menu/${itemId}/archive`, "POST")).json(),
+    );
+    expect(archived.archivedAt).not.toBeNull();
+    const rejected = await request("/api/orders", "POST", input());
+    expect(rejected.status).toBe(409);
+    expect(C.ApiError.parse(await rejected.json()).error.code).toBe("ITEM_ARCHIVED");
+    const kept = await request(`/api/menu/${itemId}`, "DELETE");
+    expect(C.ApiError.parse(await kept.json()).error.code).toBe("ITEM_HAS_ORDERS");
+    const restored = C.MenuItem.parse(
+      await (await request(`/api/menu/${itemId}/restore`, "POST")).json(),
+    );
+    expect(restored.archivedAt).toBeNull();
+    expect((await request("/api/orders", "POST", input())).status).toBe(201);
+
+    const fresh = C.MenuItem.parse(
+      await (
+        await request("/api/menu", "POST", {
+          name: "Unused special",
+          categoryId: archived.categoryId,
+          priceCents: 900,
+          imageKey: "soup",
+        })
+      ).json(),
+    );
+    await request(`/api/menu/${fresh.id}/archive`, "POST");
+    expect((await request(`/api/menu/${fresh.id}`, "DELETE")).status).toBe(204);
+    const menu = C.MenuList.parse(await (await request("/api/menu")).json());
+    expect(menu.items.map((item) => item.id)).toEqual([itemId]);
+  });
+  it("renames categories and deletes only empty ones", async () => {
+    const menu = C.MenuList.parse(await (await request("/api/menu")).json());
+    const mainsId = menu.categories[0]?.id;
+    const renamed = await request(`/api/categories/${mainsId}`, "PATCH", { name: "Large plates" });
+    expect(C.Category.parse(await renamed.json()).name).toBe("Large plates");
+    expect((await request(`/api/categories/${mainsId}`, "PATCH", { name: "x" })).status).toBe(400);
+    const blocked = await request(`/api/categories/${mainsId}`, "DELETE");
+    expect(C.ApiError.parse(await blocked.json()).error.code).toBe("CATEGORY_NOT_EMPTY");
+    const empty = C.Category.parse(
+      await (await request("/api/categories", "POST", { name: "Seasonal" })).json(),
+    );
+    expect((await request(`/api/categories/${empty.id}`, "DELETE")).status).toBe(204);
+    expect((await request(`/api/categories/${empty.id}`, "DELETE")).status).toBe(404);
+  });
   it("validates pagination, unique emails and missing records", async () => {
     expect((await request("/api/orders?pageSize=1000")).status).toBe(400);
     expect(
