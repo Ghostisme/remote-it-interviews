@@ -39,9 +39,23 @@ export function Interactive({
     | ((state: PressableStateCallbackType & { hovered: boolean }) => StyleProp<ViewStyle>);
 }) {
   const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
   return (
     <NativePressable
       {...props}
+      aria-checked={props["aria-checked"] ?? props.accessibilityState?.checked}
+      aria-disabled={props["aria-disabled"] ?? props.accessibilityState?.disabled}
+      aria-expanded={props["aria-expanded"] ?? props.accessibilityState?.expanded}
+      aria-selected={props["aria-selected"] ?? props.accessibilityState?.selected}
+      aria-busy={props["aria-busy"] ?? props.accessibilityState?.busy}
+      onFocus={(event) => {
+        setFocused(true);
+        props.onFocus?.(event);
+      }}
+      onBlur={(event) => {
+        setFocused(false);
+        props.onBlur?.(event);
+      }}
       onHoverIn={(event) => {
         setHovered(true);
         props.onHoverIn?.(event);
@@ -50,7 +64,17 @@ export function Interactive({
         setHovered(false);
         props.onHoverOut?.(event);
       }}
-      style={(state) => (typeof style === "function" ? style({ ...state, hovered }) : style)}
+      style={(state) => [
+        typeof style === "function" ? style({ ...state, hovered }) : style,
+        focused && Platform.OS === "web"
+          ? {
+              outlineWidth: 2,
+              outlineColor: t.color.brand,
+              outlineOffset: 3,
+              outlineStyle: "solid",
+            }
+          : null,
+      ]}
     />
   );
 }
@@ -417,6 +441,7 @@ export function Toggle({
   );
 }
 let dialogCount = 0;
+const openDialogs: string[] = [];
 export function Dialog({
   visible,
   title,
@@ -438,14 +463,24 @@ export function Dialog({
   const [id] = useState(() => `odyssey-dialog-${++dialogCount}`);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
+  const previousFocus = useRef<HTMLElement | null>(null);
+  const wasVisible = useRef(false);
+  if (Platform.OS === "web" && visible && !wasVisible.current)
+    previousFocus.current = document.activeElement as HTMLElement | null;
+  wasVisible.current = visible;
+  const restoreFocus = () => {
+    if (previousFocus.current?.isConnected) previousFocus.current.focus();
+  };
   useEffect(() => {
     if (!visible || Platform.OS !== "web") return;
-    const previous = document.activeElement as HTMLElement | null;
+    openDialogs.push(id);
+    const previous = previousFocus.current;
     const timer = setTimeout(() => {
       const el = document.getElementById(id);
       (el?.querySelector("input, button, [tabindex='0']") as HTMLElement | null)?.focus();
     }, 100);
     const handler = (event: KeyboardEvent) => {
+      if (openDialogs[openDialogs.length - 1] !== id) return;
       if (event.key === "Escape") {
         event.preventDefault();
         closeRef.current();
@@ -472,11 +507,22 @@ export function Dialog({
     return () => {
       clearTimeout(timer);
       document.removeEventListener("keydown", handler);
-      previous?.focus();
+      const index = openDialogs.indexOf(id);
+      if (index >= 0) openDialogs.splice(index, 1);
+      // Wait for the native modal's focus trap to unmount before restoring focus.
+      setTimeout(() => {
+        if (previous?.isConnected) previous.focus();
+      }, 0);
     };
   }, [visible, id]);
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+      onDismiss={restoreFocus}
+    >
       <View
         style={{
           flex: 1,

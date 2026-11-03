@@ -271,7 +271,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             borderBottomWidth: 1,
             borderColor: t.color.line,
             minHeight: 77,
-            paddingHorizontal: compact ? 18 : 34,
+            paddingHorizontal: compact ? t.layout.mobileGutter : t.layout.gutter,
             justifyContent: "space-between",
           }}
         >
@@ -343,7 +343,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <ScrollView
           style={{ flex: 1 }}
           contentContainerStyle={{
-            padding: compact ? 18 : 34,
+            padding: compact ? t.layout.mobileGutter : t.layout.gutter,
             paddingBottom: 40 + insets.bottom,
             width: "100%",
             maxWidth: t.layout.maxWidth,

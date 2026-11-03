@@ -38,6 +38,13 @@ export const orderNumber = (number: number) => `#OE-${String(number).padStart(4,
 export function useCompact() {
   return useWindowDimensions().width < 1000;
 }
+export function contentWidth(width: number) {
+  const compact = width < t.layout.breakpoint;
+  return (
+    Math.min(width - (compact ? 0 : t.layout.sidebar), t.layout.maxWidth) -
+    2 * (compact ? t.layout.mobileGutter : t.layout.gutter)
+  );
+}
 export function PageHeading({
   eyebrow,
   title,
