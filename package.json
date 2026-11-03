@@ -2,7 +2,7 @@
   "name": "odyssey-restaurant-workspace",
   "version": "1.0.0",
   "private": true,
-  "packageManager": "pnpm@11.23.0",
+  "packageManager": "pnpm@10.34.9",
   "engines": {
     "node": ">=22.18.0"
   },
@@ -10,6 +10,7 @@
     "dev": "turbo run dev --parallel",
     "dev:dashboard": "pnpm --filter @odyssey/dashboard dev",
     "dev:backend": "pnpm --filter @odyssey/backend dev",
+    "preview": "node scripts/preview.mjs",
     "db:up": "node scripts/database.mjs up",
     "db:down": "node scripts/database.mjs down",
     "db:migrate": "pnpm --filter @odyssey/backend db:migrate",
@@ -18,7 +19,7 @@
     "gen:contract": "pnpm --filter @odyssey/backend gen:openapi && pnpm --filter @odyssey/api-client generate",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
-    "typecheck": "turbo run typecheck",
+    "typecheck": "turbo run typecheck && tsc --project tsconfig.e2e.json",
     "test": "turbo run test",
     "test:e2e": "playwright test",
     "build": "turbo run build"
