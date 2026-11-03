@@ -1,0 +1,1 @@
+{ "name": "@odyssey/types", "private": true, "version": "1.0.0", "type": "module", "main": "src/index.ts", "types": "src/index.ts", "dependencies": { "@odyssey/api-client": "workspace:*" }, "scripts": { "typecheck": "tsc --noEmit" } }

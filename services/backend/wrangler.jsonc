@@ -1,0 +1,9 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "odyssey-restaurant-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": { "ALLOWED_ORIGINS": "http://localhost:8081,http://127.0.0.1:8081" },
+  "observability": { "enabled": true }
+}

@@ -1,0 +1,17 @@
+node_modules/
+.turbo/
+.expo/
+dist/
+coverage/
+.local/
+.env
+.env.*
+!.env.example
+.dev.vars
+.wrangler/
+test-results/
+playwright-report/
+*.log
+*.tsbuildinfo
+expo-env.d.ts
+

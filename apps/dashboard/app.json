@@ -1,0 +1,11 @@
+{
+  "expo": {
+    "name": "Odyssey — Olive & Ember",
+    "slug": "odyssey-dashboard",
+    "scheme": "odyssey",
+    "version": "1.0.0",
+    "platforms": ["web", "ios", "android"],
+    "web": { "bundler": "metro", "output": "single", "name": "Odyssey · Restaurant workspace" },
+    "plugins": ["expo-router", "expo-font"]
+  }
+}

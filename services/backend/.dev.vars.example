@@ -1,0 +1,2 @@
+DATABASE_URL="postgresql://odyssey:odyssey_local@127.0.0.1:54329/odyssey"
+
