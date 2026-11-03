@@ -33,5 +33,9 @@
     "react-native-svg": "15.12.1",
     "react-native-web": "^0.21.0"
   },
-  "devDependencies": { "@types/react": "~19.1.10", "react-test-renderer": "19.1.0", "@types/react-test-renderer": "^19.1.0" }
+  "devDependencies": {
+    "@types/react": "~19.1.10",
+    "react-test-renderer": "19.1.0",
+    "@types/react-test-renderer": "^19.1.0"
+  }
 }

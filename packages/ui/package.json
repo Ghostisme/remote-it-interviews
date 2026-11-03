@@ -1,7 +1,23 @@
 {
-  "name": "@odyssey/ui", "private": true, "version": "1.0.0", "type": "module", "main": "src/index.ts", "types": "src/index.ts",
-  "scripts": { "typecheck": "tsc --noEmit" },
-  "dependencies": { "@odyssey/shared": "workspace:*", "lucide-react-native": "^0.468.0", "react-native-svg": "15.12.1" },
-  "peerDependencies": { "react": "19.1.0", "react-native": "0.81.5" },
-  "devDependencies": { "@types/react": "~19.1.10" }
+  "name": "@odyssey/ui",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@odyssey/shared": "workspace:*",
+    "lucide-react-native": "^0.468.0",
+    "react-native-svg": "15.12.1"
+  },
+  "peerDependencies": {
+    "react": "19.1.0",
+    "react-native": "0.81.5"
+  },
+  "devDependencies": {
+    "@types/react": "~19.1.10"
+  }
 }
