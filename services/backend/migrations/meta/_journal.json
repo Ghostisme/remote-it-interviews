@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1793713095355,
+      "tag": "0000_restaurant_core",
+      "breakpoints": true
+    }
+  ]
+}

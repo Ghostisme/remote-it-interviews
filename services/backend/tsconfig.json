@@ -1,1 +1,5 @@
-{ "extends": "../../tsconfig.base.json", "compilerOptions": { "types": ["node"] }, "include": ["src", "scripts", "tests", "*.ts"] }
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "types": ["node"] },
+  "include": ["src", "scripts", "tests", "*.ts"]
+}
