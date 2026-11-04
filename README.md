@@ -13,7 +13,7 @@ npm install --global pnpm@10.34.9
 git clone https://github.com/Ghostisme/remote-it-interviews.git
 cd remote-it-interviews
 pnpm install --frozen-lockfile
-pnpm setup
+pnpm run setup
 pnpm dev
 ```
 
@@ -24,7 +24,7 @@ pnpm dev:backend
 pnpm dev:dashboard
 ```
 
-`pnpm setup` creates ignored local environment files, starts a project-owned PostgreSQL 18 cluster, applies committed Drizzle migrations, seeds the restaurant, and regenerates the API client. The seed contains **4 categories, 12 dishes, 16 customers, and 112 historical orders**, including active kitchen orders. Running setup again preserves existing restaurant data.
+`pnpm run setup` creates ignored local environment files, starts a project-owned PostgreSQL 18 cluster, applies committed Drizzle migrations, seeds the restaurant, and regenerates the API client. Use the explicit `run`: `pnpm setup` is pnpm's own shell setup command. The seed contains **4 categories, 12 dishes, 16 customers, and 112 historical orders**, including active kitchen orders. Running setup again preserves existing restaurant data.
 
 Database files stay in `.local/postgres`; the cluster listens only on `127.0.0.1:55432`. Bootstrap verifies the cluster's data directory before creating the dedicated `odyssey` and `odyssey_test` databases. `pnpm db:down` stops this cluster; `pnpm db:up` restarts it. On Windows, an ASCII junction in the system temporary directory allows checkouts with non-ASCII paths. On Unix, run the bundled PostgreSQL tools as a regular user.
 
@@ -35,7 +35,7 @@ For an existing PostgreSQL server, create dedicated databases named `odyssey` an
 | Screen | Working behavior |
 | --- | --- |
 | **Home** `/` | Live revenue and order metrics, previous-period comparison, interactive daily chart, 7/14/30-day reporting, popular dishes, recent order details, service status. |
-| **Orders** `/orders` | Search, status/date filters, pagination, customer selection, item quantities, pickup/delivery/dine-in, checkout, pricing breakdown, order details, action buttons and event history. |
+| **Orders** `/orders` | Search by customer or displayed order number, status/date filters, pagination, customer selection, item quantities, pickup/delivery/dine-in, checkout, pricing breakdown, order details, action buttons and event history. |
 | **Menu** `/menu` | Create/rename/reorder categories, delete empty categories, search/filter, create/edit dishes, curated covers, prices/availability, archive/restore and guarded permanent deletion. |
 | **CRM** `/crm` | Searchable customer list, pagination, create/edit profiles, notes, order counts, completed spend, recent history and links to individual orders. |
 | **Settings** `/settings` | Restaurant profile, accepting orders, auto-accept, service availability, preparation time, minimum order, delivery fee, tax, hours and timezone; validation, save and discard. |
@@ -46,7 +46,7 @@ A useful three-minute walkthrough:
 1. In **Menu**, add a dish or edit a price. Switch its availability off and see that checkout prevents ordering it; switch it on again.
 2. In **CRM**, add a guest and a note. In **Settings**, leave accepting orders enabled and turn auto-accept off to see every kitchen step.
 3. In **Orders**, create an order for that guest. Choose dishes and a service; delivery also requires an address. The API returns the authoritative total.
-4. Open the order and use **Accept order → Start preparing → Mark ready → Complete order**. The timeline records each action. Cancellation is available only for active orders and requires a reason.
+4. Open the order and use **Accept order → Start preparing → Mark ready → Complete order**. The timeline records each action. Cancellation is available only for active orders, asks for confirmation and accepts an optional reason.
 5. Open the guest's CRM profile: the completed order contributes to spend. Follow its history entry back to the order. On **Home**, completed revenue and the recent-orders list reflect the same transaction.
 6. Set **Accepting orders** off, then try checkout to see the business rule across pages. Restore it afterward.
 7. In **Menu → Edit**, archive a dish: it leaves the active menu and new-order picker. Open **Archived** to restore it or permanently delete an unused dish. A dish with past orders remains archived so history stays intact. **Manage categories** supports renaming, display order and deleting empty categories.
@@ -82,7 +82,7 @@ The design system centralizes a warm green/orange palette, DM Sans/DM Serif Disp
 
 ### Ordering rules
 
-- **Money:** prices and totals use integer cents; tax uses basis points. The backend reads current menu prices, merges duplicate lines, calculates tax once on subtotal, and charges a delivery fee only for delivery. Clients cannot supply authoritative totals. Order lines retain item names and price snapshots after later menu edits.
+- **Money:** prices and totals use integer cents; tax uses basis points. The backend reads current menu prices, rejects duplicate dish IDs, calculates tax once on subtotal, and charges a delivery fee only for delivery. Clients cannot supply authoritative totals. Order lines retain item names and price snapshots after later menu edits.
 - **Validation:** unavailable items, paused ordering, disabled services, insufficient subtotal, invalid quantities and missing delivery addresses are rejected. Constraint and validation errors have typed responses and a request ID.
 - **State:** `pending → accepted → preparing → ready → completed`. Auto-accept starts at `accepted`. Only active orders can be cancelled. Responses contain allowed actions; commands use row locks and an expected version, so stale actions return a conflict rather than overwriting another operator.
 - **Retries:** order creation requires an idempotency key. A transaction-scoped advisory lock serializes retries; an identical request returns the existing order, while the same key with different content returns a conflict.
@@ -91,7 +91,7 @@ The design system centralizes a warm green/orange palette, DM Sans/DM Serif Disp
 
 ## Checks
 
-After `pnpm setup`:
+After `pnpm run setup`:
 
 ```sh
 pnpm lint
@@ -107,7 +107,7 @@ Linux runners may need `pnpm exec playwright install --with-deps chromium webkit
 
 | Check | Coverage |
 | --- | --- |
-| Backend: **10 tests** | Real PostgreSQL transactions, authoritative pricing, snapshots, availability/settings, invalid payloads, valid/conflicting actions, concurrent idempotency, CRM/summary aggregation, menu archiving/restoration, guarded deletion and category edits. |
+| Backend: **12 tests** | Real PostgreSQL transactions, authoritative pricing, snapshots, availability/settings, invalid payloads and malformed JSON, displayed/padded order-number search, valid/conflicting actions, concurrent idempotency, CRM/summary aggregation, menu archiving/restoration, guarded deletion and category edits. |
 | Frontend logic: **5 tests** | Cart quantity limits/removal, integer-money parsing, rounded tax/delivery preview, unavailable-item/minimum-spend checks and archived basket items blocking checkout. |
 | Browser: **14 checks** | Seven scenarios in each of desktop Chromium and mobile WebKit: complete menu → guest → settings → delivery → kitchen → CRM → revenue workflow; loading/empty/error/retry; nested dialog keyboard/focus; six phone routes; category editing and dish lifecycle; all six loaded pages at seven widths; long content and small-screen dialogs. |
 | Responsive layout | Widths **320, 375, 390, 768, 1024, 1366 and 1600 px**, plus **320 × 400** dialog and **1366 × 600** sidebar checks. Controls are checked for clipping, including inside cards; navigation strips and wide tables intentionally scroll. The long-content case uses 80-character unbroken names and a large price. |
