@@ -30,6 +30,7 @@ import {
 } from "react-native";
 import { type Tone, tokens as t, tones } from "./tokens";
 
+/** Normalize hover, keyboard focus, and accessibility state across native and web controls. */
 export function Interactive({
   style,
   ...props
@@ -43,6 +44,7 @@ export function Interactive({
   return (
     <NativePressable
       {...props}
+      // Forward explicit ARIA state because native accessibility mappings differ on the web.
       aria-checked={props["aria-checked"] ?? props.accessibilityState?.checked}
       aria-disabled={props["aria-disabled"] ?? props.accessibilityState?.disabled}
       aria-expanded={props["aria-expanded"] ?? props.accessibilityState?.expanded}
@@ -80,6 +82,7 @@ export function Interactive({
 }
 const Pressable = Interactive;
 
+/** Render shared typography with optional truncation and flexible layout constraints. */
 export function Txt({
   children,
   size = 14,
@@ -110,6 +113,7 @@ export function Txt({
     </Text>
   );
 }
+/** Arrange related controls horizontally, with optional wrapping on narrow screens. */
 export function Row({
   children,
   gap = 12,
@@ -132,6 +136,7 @@ export function Row({
     </View>
   );
 }
+/** Arrange content vertically using a consistent gap. */
 export function Stack({
   children,
   gap = 16,
@@ -143,6 +148,7 @@ export function Stack({
 }) {
   return <View style={[{ gap }, style]}>{children}</View>;
 }
+/** Render the shared bordered surface used by dashboard sections. */
 export function Card({
   children,
   style,
@@ -170,6 +176,7 @@ export function Card({
     </View>
   );
 }
+/** Render an accessible action and prevent duplicate presses while loading. */
 export function Button({
   children,
   onPress,
@@ -250,6 +257,7 @@ export function Button({
     </Pressable>
   );
 }
+/** Display a compact semantic label that can shrink within a narrow container. */
 export function Badge({
   children,
   tone = "neutral",
@@ -282,6 +290,7 @@ export function Badge({
     </Row>
   );
 }
+/** Show a deterministic initials avatar without a remote image dependency. */
 export function Avatar({
   name,
   size = 36,
@@ -308,6 +317,7 @@ export function Avatar({
     </View>
   );
 }
+/** Render a labeled input with validation feedback and a visible focus state. */
 export function Field({
   label,
   error,
@@ -328,13 +338,13 @@ export function Field({
         {...props}
         accessibilityLabel={props.accessibilityLabel ?? label}
         placeholderTextColor={t.color.subtle}
-        onFocus={(e) => {
+        onFocus={(event) => {
           setFocused(true);
-          props.onFocus?.(e);
+          props.onFocus?.(event);
         }}
-        onBlur={(e) => {
+        onBlur={(event) => {
           setFocused(false);
-          props.onBlur?.(e);
+          props.onBlur?.(event);
         }}
         style={[
           {
@@ -347,6 +357,7 @@ export function Field({
             color: t.color.ink,
             backgroundColor: props.editable === false ? t.color.soft : t.color.surface,
             fontFamily: t.font.regular,
+            // A 16px input font prevents automatic zoom in mobile Safari.
             fontSize: width < 600 ? 16 : 13,
           },
           style,
@@ -360,6 +371,7 @@ export function Field({
     </Stack>
   );
 }
+/** Render a controlled search input with an accessible clear action. */
 export function SearchField({
   value,
   onChange,
@@ -399,6 +411,7 @@ export function SearchField({
           minWidth: 0,
           paddingVertical: 10,
           fontFamily: t.font.regular,
+          // Match Field so search also avoids automatic zoom on narrow mobile viewports.
           fontSize: width < 600 ? 16 : 13,
           color: t.color.ink,
         }}
@@ -415,6 +428,7 @@ export function SearchField({
     </Row>
   );
 }
+/** Expose a controlled boolean setting with switch semantics. */
 export function Toggle({
   value,
   onChange,
@@ -447,8 +461,10 @@ export function Toggle({
     </Pressable>
   );
 }
-let dialogCount = 0;
-const openDialogs: string[] = [];
+// Only the topmost dialog receives keyboard actions when a select opens over another dialog.
+let dialogSequence = 0;
+const openDialogIds: string[] = [];
+/** Render a responsive modal with web focus trapping, stacked Escape handling, and focus restoration. */
 export function Dialog({
   visible,
   title,
@@ -468,66 +484,75 @@ export function Dialog({
 }) {
   const { width, height } = useWindowDimensions();
   const padding = width < 400 ? 16 : 24;
-  const [id] = useState(() => `odyssey-dialog-${++dialogCount}`);
-  const closeRef = useRef(onClose);
-  closeRef.current = onClose;
-  const previousFocus = useRef<HTMLElement | null>(null);
-  const wasVisible = useRef(false);
-  if (Platform.OS === "web" && visible && !wasVisible.current)
-    previousFocus.current = document.activeElement as HTMLElement | null;
-  wasVisible.current = visible;
-  const restoreFocus = () => {
-    if (previousFocus.current?.isConnected) previousFocus.current.focus();
+  const [dialogId] = useState(() => `odyssey-dialog-${++dialogSequence}`);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const previouslyFocusedElementRef = useRef<HTMLElement | null>(null);
+  const wasVisibleRef = useRef(false);
+  if (Platform.OS === "web" && visible && !wasVisibleRef.current)
+    previouslyFocusedElementRef.current = document.activeElement as HTMLElement | null;
+  wasVisibleRef.current = visible;
+  const restorePreviousFocus = () => {
+    if (previouslyFocusedElementRef.current?.isConnected)
+      previouslyFocusedElementRef.current.focus();
   };
   useEffect(() => {
     if (!visible || Platform.OS !== "web") return;
-    openDialogs.push(id);
-    const previous = previousFocus.current;
-    const timer = setTimeout(() => {
-      const el = document.getElementById(id);
-      if (openDialogs[openDialogs.length - 1] !== id || el?.contains(document.activeElement))
+    openDialogIds.push(dialogId);
+    // Capture the original trigger before nested dialogs can move focus.
+    const previouslyFocusedElement = previouslyFocusedElementRef.current;
+    // Wait for the modal DOM to mount before choosing its initial focus target.
+    const initialFocusTimer = setTimeout(() => {
+      const dialogElement = document.getElementById(dialogId);
+      if (
+        openDialogIds[openDialogIds.length - 1] !== dialogId ||
+        dialogElement?.contains(document.activeElement)
+      )
         return;
       (
-        (el?.querySelector("input, textarea") ??
-          el?.querySelector("button:not(:disabled), [tabindex='0']")) as HTMLElement | null
+        (dialogElement?.querySelector("input, textarea") ??
+          dialogElement?.querySelector(
+            "button:not(:disabled), [tabindex='0']",
+          )) as HTMLElement | null
       )?.focus();
     }, 0);
-    const handler = (event: KeyboardEvent) => {
-      if (openDialogs[openDialogs.length - 1] !== id) return;
+    const handleDialogKeyDown = (event: KeyboardEvent) => {
+      if (openDialogIds[openDialogIds.length - 1] !== dialogId) return;
       if (event.key === "Escape") {
         event.preventDefault();
-        if (!event.repeat) closeRef.current();
+        if (!event.repeat) onCloseRef.current();
       }
+      // Wrap keyboard traversal inside the active dialog in both directions.
       if (event.key !== "Tab") return;
-      const nodes = document
-        .getElementById(id)
+      const focusableElements = document
+        .getElementById(dialogId)
         ?.querySelectorAll<HTMLElement>(
           "button:not(:disabled), input:not(:disabled), textarea, [tabindex='0']",
         );
-      if (!nodes?.length) return;
-      const first = nodes[0];
-      const last = nodes[nodes.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
+      if (!focusableElements?.length) return;
+      const firstFocusableElement = focusableElements[0];
+      const lastFocusableElement = focusableElements[focusableElements.length - 1];
+      if (event.shiftKey && document.activeElement === firstFocusableElement) {
         event.preventDefault();
-        last?.focus();
+        lastFocusableElement?.focus();
       }
-      if (!event.shiftKey && document.activeElement === last) {
+      if (!event.shiftKey && document.activeElement === lastFocusableElement) {
         event.preventDefault();
-        first?.focus();
+        firstFocusableElement?.focus();
       }
     };
-    document.addEventListener("keydown", handler);
+    document.addEventListener("keydown", handleDialogKeyDown);
     return () => {
-      clearTimeout(timer);
-      document.removeEventListener("keydown", handler);
-      const index = openDialogs.indexOf(id);
-      if (index >= 0) openDialogs.splice(index, 1);
+      clearTimeout(initialFocusTimer);
+      document.removeEventListener("keydown", handleDialogKeyDown);
+      const dialogStackIndex = openDialogIds.indexOf(dialogId);
+      if (dialogStackIndex >= 0) openDialogIds.splice(dialogStackIndex, 1);
       // Wait for the native modal's focus trap to unmount before restoring focus.
       setTimeout(() => {
-        if (previous?.isConnected) previous.focus();
+        if (previouslyFocusedElement?.isConnected) previouslyFocusedElement.focus();
       }, 0);
     };
-  }, [visible, id]);
+  }, [visible, dialogId]);
   return (
     <Modal
       visible={visible}
@@ -537,7 +562,7 @@ export function Dialog({
       animationType={Platform.OS === "web" ? "none" : "fade"}
       // The web stack handles Escape on keydown; RN Web also closes on keyup.
       onRequestClose={Platform.OS === "web" ? undefined : onClose}
-      onDismiss={restoreFocus}
+      onDismiss={restorePreviousFocus}
     >
       <View
         style={{
@@ -554,7 +579,7 @@ export function Dialog({
           style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
         />
         <View
-          nativeID={id}
+          nativeID={dialogId}
           role="dialog"
           aria-modal
           accessibilityLabel={title}
@@ -614,6 +639,7 @@ export function Dialog({
     </Modal>
   );
 }
+/** Present controlled options in a dialog that remains usable on small touch screens. */
 export function Select({
   label,
   value,
@@ -629,7 +655,7 @@ export function Select({
   disabled?: boolean;
   placeholder?: string;
 }) {
-  const [open, setOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
   return (
     <Stack gap={6} style={{ maxWidth: "100%", minWidth: label ? 0 : 130 }}>
       {label ? (
@@ -641,12 +667,12 @@ export function Select({
         accessibilityRole="button"
         accessibilityLabel={
           label
-            ? `${label}: ${options.find((o) => o.value === value)?.label ?? placeholder}`
-            : (options.find((o) => o.value === value)?.label ?? placeholder)
+            ? `${label}: ${options.find((option) => option.value === value)?.label ?? placeholder}`
+            : (options.find((option) => option.value === value)?.label ?? placeholder)
         }
-        accessibilityState={{ expanded: open, disabled }}
+        accessibilityState={{ expanded: isOpen, disabled }}
         disabled={disabled}
-        onPress={() => setOpen(true)}
+        onPress={() => setIsOpen(true)}
         style={({ hovered }) => ({
           minHeight: 42,
           minWidth: 0,
@@ -662,11 +688,11 @@ export function Select({
         })}
       >
         <Txt size={12} lines={1} style={{ flex: 1, minWidth: 0 }}>
-          {options.find((o) => o.value === value)?.label ?? placeholder}
+          {options.find((option) => option.value === value)?.label ?? placeholder}
         </Txt>
         <ChevronDown size={14} color={t.color.muted} />
       </Pressable>
-      <Dialog visible={open} title={label ?? "Select an option"} onClose={() => setOpen(false)}>
+      <Dialog visible={isOpen} title={label ?? "Select an option"} onClose={() => setIsOpen(false)}>
         <Stack gap={4}>
           {options.map((option) => (
             <Pressable
@@ -675,7 +701,7 @@ export function Select({
               key={option.value}
               onPress={() => {
                 onChange(option.value);
-                setOpen(false);
+                setIsOpen(false);
               }}
               style={({ hovered }) => ({
                 flexDirection: "row",
@@ -706,6 +732,7 @@ export function Select({
     </Stack>
   );
 }
+/** Explain an empty collection and optionally offer the next useful action. */
 export function EmptyState({
   title,
   message,
@@ -730,6 +757,7 @@ export function EmptyState({
     </Stack>
   );
 }
+/** Display contextual feedback with an optional retry action. */
 export function Banner({
   message,
   tone = "danger",
@@ -760,6 +788,7 @@ export function Banner({
     </Row>
   );
 }
+/** Reserve a loading placeholder with predictable dimensions. */
 export function Skeleton({
   width = "100%",
   height = 18,
@@ -774,6 +803,7 @@ export function Skeleton({
     />
   );
 }
+/** Keep the dashboard layout recognizable while initial queries are pending. */
 export function LoadingState() {
   return (
     <Stack gap={20}>
@@ -798,7 +828,9 @@ export function LoadingState() {
     </Stack>
   );
 }
+/** Describe one table column while keeping row rendering type-safe for consumers. */
 export type Column<T> = { title: string; flex?: number; render: (row: T) => ReactNode };
+/** Render generic rows with horizontal scrolling contained within the table on small screens. */
 export function DataTable<T>({
   rows,
   columns,
@@ -865,6 +897,7 @@ export function DataTable<T>({
     </ScrollView>
   );
 }
+/** Display one-based page navigation and the visible result range, including empty lists. */
 export function Pagination({
   page,
   totalPages,
@@ -912,13 +945,15 @@ export function Pagination({
   );
 }
 const ToastContext = createContext<(message: string, tone?: Tone) => void>(() => {});
+/** Provide transient feedback with polite announcements and a timer reset for each message. */
 export function ToastProvider({ children }: { children: ReactNode }) {
   const { width } = useWindowDimensions();
   const [toast, setToast] = useState<{ message: string; tone: Tone } | null>(null);
   useEffect(() => {
     if (!toast) return;
-    const timer = setTimeout(() => setToast(null), 4500);
-    return () => clearTimeout(timer);
+    // Replacing a toast cancels its old timer so an earlier message cannot dismiss the new one.
+    const dismissTimer = setTimeout(() => setToast(null), 4500);
+    return () => clearTimeout(dismissTimer);
   }, [toast]);
   return (
     <ToastContext.Provider value={(message, tone = "success") => setToast({ message, tone })}>
@@ -956,4 +991,5 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     </ToastContext.Provider>
   );
 }
+/** Return the nearest provider's notification dispatcher. */
 export const useToast = () => useContext(ToastContext);

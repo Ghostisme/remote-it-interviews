@@ -15,24 +15,28 @@ import { ActivityIndicator, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AppShell } from "../src/components/layout";
 
+/** Compose the shared query cache, bundled fonts, notifications, and responsive application shell. */
 export default function Layout() {
-  const [client] = useState(
+  // Keep one cache instance for the lifetime of this root layout.
+  const [queryClient] = useState(
     () =>
       new QueryClient({
         defaultOptions: {
           queries: { staleTime: 10000, retry: 1, refetchOnWindowFocus: true },
+          // Business hooks explicitly control retries and order idempotency keys.
           mutations: { retry: false },
         },
       }),
   );
-  const [loaded, error] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     DMSans_400Regular,
     DMSans_500Medium,
     DMSans_600SemiBold,
     DMSans_700Bold,
     DMSerifDisplay_400Regular,
   });
-  if (!loaded && !error)
+  // Continue rendering if fonts fail so a loading indicator cannot block the entire app.
+  if (!fontsLoaded && !fontError)
     return (
       <View
         style={{
@@ -47,7 +51,7 @@ export default function Layout() {
     );
   return (
     <SafeAreaProvider>
-      <QueryClientProvider client={client}>
+      <QueryClientProvider client={queryClient}>
         <ToastProvider>
           <StatusBar style="dark" />
           <AppShell>

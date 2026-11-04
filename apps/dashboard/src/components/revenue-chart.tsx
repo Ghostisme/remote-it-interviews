@@ -16,28 +16,32 @@ import Svg, {
   Text as SvgText,
 } from "react-native-svg";
 
+/** Plot completed revenue in integer cents with touch targets and keyboard-operable day navigation. */
 export function RevenueChart({ daily }: { daily: Summary["daily"] }) {
-  const [selected, setSelected] = useState<number | null>(null);
+  const [selectedDayIndex, setSelectedDayIndex] = useState<number | null>(null);
+  // A fixed SVG coordinate system scales with its container without widening the page.
   const width = 710;
   const height = 245;
   const left = 47;
   const top = 16;
   const bottom = 211;
   const right = 695;
-  const max = Math.max(10000, ...daily.map((d) => d.revenueCents));
-  const ceiling = Math.ceil(max / 10000) * 10000;
+  // Round the axis up to $100 steps and keep zero-revenue ranges readable.
+  const maxRevenueCents = Math.max(10000, ...daily.map((day) => day.revenueCents));
+  const axisCeilingCents = Math.ceil(maxRevenueCents / 10000) * 10000;
   const points = daily.map((day, index) => ({
     ...day,
     x: left + (index / Math.max(1, daily.length - 1)) * (right - left),
-    y: bottom - (day.revenueCents / ceiling) * (bottom - top),
+    y: bottom - (day.revenueCents / axisCeilingCents) * (bottom - top),
   }));
-  const line = points
+  const linePath = points
     .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`)
     .join(" ");
-  const first = points[0];
-  const last = points[points.length - 1];
-  const active = selected === null ? null : points[selected];
-  const date = (value: string) =>
+  const firstPoint = points[0];
+  const lastPoint = points[points.length - 1];
+  const selectedPoint = selectedDayIndex === null ? null : points[selectedDayIndex];
+  // API buckets are UTC dates; local timezone conversion would shift some day labels.
+  const formatUtcDate = (value: string) =>
     new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" }).format(
       new Date(`${value}T00:00:00Z`),
     );
@@ -56,15 +60,15 @@ export function RevenueChart({ daily }: { daily: Summary["daily"] }) {
             variant="ghost"
             label="Previous chart day"
             onPress={() =>
-              setSelected((current) =>
+              setSelectedDayIndex((current) =>
                 current === null ? points.length - 1 : Math.max(0, current - 1),
               )
             }
             icon={<ChevronLeft size={12} color={t.color.brand} />}
           />
-          <Badge tone={active ? "brand" : "neutral"}>
-            {active
-              ? `${date(active.date)} · ${formatMoney(active.revenueCents)} · ${active.orderCount} orders`
+          <Badge tone={selectedPoint ? "brand" : "neutral"}>
+            {selectedPoint
+              ? `${formatUtcDate(selectedPoint.date)} · ${formatMoney(selectedPoint.revenueCents)} · ${selectedPoint.orderCount} orders`
               : "Select a point to explore"}
           </Badge>
           <Button
@@ -72,7 +76,7 @@ export function RevenueChart({ daily }: { daily: Summary["daily"] }) {
             variant="ghost"
             label="Next chart day"
             onPress={() =>
-              setSelected((current) =>
+              setSelectedDayIndex((current) =>
                 current === null ? 0 : Math.min(points.length - 1, current + 1),
               )
             }
@@ -111,18 +115,18 @@ export function RevenueChart({ daily }: { daily: Summary["daily"] }) {
                   textAnchor="end"
                   fontSize={11}
                   fill={t.color.muted}
-                >{`$${Math.round(((ceiling / 100) * index) / 4)}`}</SvgText>
+                >{`$${Math.round(((axisCeilingCents / 100) * index) / 4)}`}</SvgText>
               </G>
             );
           })}
-          {first && last ? (
+          {firstPoint && lastPoint ? (
             <Path
-              d={`${line} L ${last.x} ${bottom} L ${first.x} ${bottom} Z`}
+              d={`${linePath} L ${lastPoint.x} ${bottom} L ${firstPoint.x} ${bottom} Z`}
               fill="url(#revenue-fill)"
             />
           ) : null}
           <Path
-            d={line}
+            d={linePath}
             fill="none"
             stroke={t.color.brand}
             strokeWidth={2.8}
@@ -131,7 +135,7 @@ export function RevenueChart({ daily }: { daily: Summary["daily"] }) {
           />
           {points.map((point, index) => (
             <G key={point.date}>
-              {selected === index ? (
+              {selectedDayIndex === index ? (
                 <Line
                   x1={point.x}
                   x2={point.x}
@@ -145,7 +149,7 @@ export function RevenueChart({ daily }: { daily: Summary["daily"] }) {
               <Circle
                 cx={point.x}
                 cy={point.y}
-                r={selected === index ? 5 : 3}
+                r={selectedDayIndex === index ? 5 : 3}
                 fill={t.color.surface}
                 stroke={t.color.brand}
                 strokeWidth={2}
@@ -156,8 +160,8 @@ export function RevenueChart({ daily }: { daily: Summary["daily"] }) {
                 width={28}
                 height={bottom - top + 8}
                 fill="transparent"
-                onPress={() => setSelected(selected === index ? null : index)}
-                accessibilityLabel={`${date(point.date)}: ${formatMoney(point.revenueCents)}, ${point.orderCount} orders`}
+                onPress={() => setSelectedDayIndex(selectedDayIndex === index ? null : index)}
+                accessibilityLabel={`${formatUtcDate(point.date)}: ${formatMoney(point.revenueCents)}, ${point.orderCount} orders`}
               />
               {daily.length <= 7 ||
               index % Math.ceil(daily.length / 7) === 0 ||
@@ -169,7 +173,7 @@ export function RevenueChart({ daily }: { daily: Summary["daily"] }) {
                   fontSize={11}
                   fill={t.color.muted}
                 >
-                  {date(point.date)}
+                  {formatUtcDate(point.date)}
                 </SvgText>
               ) : null}
             </G>

@@ -18,6 +18,7 @@ import { ChevronRight } from "lucide-react-native";
 import type { ReactNode } from "react";
 import { Image, Platform, useWindowDimensions, View } from "react-native";
 
+/** Keep order status colors consistent across lists, dialogs, and summary widgets. */
 export const statusTones: Record<OrderStatus, Tone> = {
   pending: "warning",
   accepted: "info",
@@ -26,18 +27,24 @@ export const statusTones: Record<OrderStatus, Tone> = {
   completed: "success",
   cancelled: "neutral",
 };
+/** Turn API enum values into readable display labels. */
 export const titleCase = (text: string) =>
-  text.replaceAll("_", " ").replace(/\b\w/g, (c) => c.toUpperCase());
-export const dateLabel = (value: string, time = false) =>
+  text.replaceAll("_", " ").replace(/\b\w/g, (character) => character.toUpperCase());
+/** Format an event timestamp in the viewer's local timezone, optionally including the time. */
+export const dateLabel = (value: string, includeTime = false) =>
   new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
-    ...(time ? { hour: "numeric", minute: "2-digit" } : {}),
+    ...(includeTime ? { hour: "numeric", minute: "2-digit" } : {}),
   }).format(new Date(value));
-export const orderNumber = (number: number) => `#OE-${String(number).padStart(4, "0")}`;
+/** Format the public sequence number independently of the internal order ID. */
+export const orderNumber = (sequenceNumber: number) =>
+  `#OE-${String(sequenceNumber).padStart(4, "0")}`;
+/** Track the compact navigation breakpoint as the viewport changes. */
 export function useCompact() {
-  return useWindowDimensions().width < 1000;
+  return useWindowDimensions().width < t.layout.breakpoint;
 }
+/** Calculate usable content width from the same sidebar and gutters as AppShell. */
 export function contentWidth(width: number) {
   const compact = width < t.layout.breakpoint;
   return (
@@ -45,6 +52,7 @@ export function contentWidth(width: number) {
     2 * (compact ? t.layout.mobileGutter : t.layout.gutter)
   );
 }
+/** Render a page title and actions that wrap within mobile viewports. */
 export function PageHeading({
   eyebrow,
   title,
@@ -79,6 +87,7 @@ export function PageHeading({
     </Row>
   );
 }
+/** Render a compact section title with an optional trailing action. */
 export function SectionHeading({
   title,
   subtitle,
@@ -104,6 +113,7 @@ export function SectionHeading({
     </Row>
   );
 }
+/** Translate an order status into its shared readable label and semantic color. */
 export function StatusBadge({ status }: { status: OrderStatus }) {
   return (
     <Badge tone={statusTones[status]} dot>
@@ -111,9 +121,11 @@ export function StatusBadge({ status }: { status: OrderStatus }) {
     </Badge>
   );
 }
+/** Explain a failed query and allow the user to retry it in place. */
 export function QueryError({ error, retry }: { error: unknown; retry: () => void }) {
   return <Banner message={errorMessage(error)} tone="danger" onRetry={retry} />;
 }
+/** Resolve bundled menu photos using web-relative or configured native asset URLs. */
 export function FoodImage({
   imageKey,
   size,
@@ -143,6 +155,7 @@ export function FoodImage({
     />
   );
 }
+/** Render controlled filter tabs with selected-state accessibility and wrapping. */
 export function Tabs({
   options,
   value,
@@ -197,6 +210,7 @@ export function Tabs({
     </Row>
   );
 }
+/** Render reusable order summaries with a smaller column set for overview cards. */
 export function OrdersTable({
   rows,
   onSelect,
@@ -209,20 +223,20 @@ export function OrdersTable({
   return (
     <DataTable
       rows={rows}
-      keyOf={(r) => r.id}
-      onRowPress={(r) => onSelect(r.id)}
+      keyOf={(order) => order.id}
+      onRowPress={(order) => onSelect(order.id)}
       minWidth={compact ? 620 : 820}
       columns={[
         {
           title: "Order",
           flex: 1.1,
-          render: (r) => (
+          render: (order) => (
             <Stack gap={2}>
               <Txt size={12} weight="semibold">
-                {orderNumber(r.number)}
+                {orderNumber(order.number)}
               </Txt>
               <Txt size={10} color={t.color.muted}>
-                {dateLabel(r.createdAt, true)}
+                {dateLabel(order.createdAt, true)}
               </Txt>
             </Stack>
           ),
@@ -230,11 +244,11 @@ export function OrdersTable({
         {
           title: "Customer",
           flex: 1.4,
-          render: (r) => (
+          render: (order) => (
             <Row gap={9}>
-              <Avatar name={r.customerName} size={30} />
+              <Avatar name={order.customerName} size={30} />
               <Txt size={12} lines={1}>
-                {r.customerName}
+                {order.customerName}
               </Txt>
             </Row>
           ),
@@ -243,18 +257,18 @@ export function OrdersTable({
           ? [
               {
                 title: "Service",
-                render: (r: OrderSummary) => (
+                render: (order: OrderSummary) => (
                   <Txt size={12} color={t.color.muted}>
-                    {titleCase(r.fulfillment)}
+                    {titleCase(order.fulfillment)}
                   </Txt>
                 ),
               },
               {
                 title: "Items",
                 flex: 0.55,
-                render: (r: OrderSummary) => (
+                render: (order: OrderSummary) => (
                   <Txt size={12} color={t.color.muted}>
-                    {r.itemCount} items
+                    {order.itemCount} items
                   </Txt>
                 ),
               },
@@ -263,18 +277,18 @@ export function OrdersTable({
         {
           title: "Amount",
           flex: 0.8,
-          render: (r) => (
+          render: (order) => (
             <Txt size={12} weight="semibold">
-              {formatMoney(r.totalCents)}
+              {formatMoney(order.totalCents)}
             </Txt>
           ),
         },
         {
           title: "Status",
           flex: 1,
-          render: (r) => (
+          render: (order) => (
             <Row style={{ justifyContent: "space-between" }}>
-              <StatusBadge status={r.status} />
+              <StatusBadge status={order.status} />
               <ChevronRight size={14} color={t.color.subtle} />
             </Row>
           ),
@@ -283,6 +297,7 @@ export function OrdersTable({
     />
   );
 }
+/** Keep dialog actions consistent and block dismissal during a pending save. */
 export function FormActions({
   onClose,
   onSubmit,

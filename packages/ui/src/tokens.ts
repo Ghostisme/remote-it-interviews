@@ -1,3 +1,4 @@
+/** Define the shared visual vocabulary for native and web components. */
 export const tokens = {
   color: {
     canvas: "#F7F8FA",
@@ -34,6 +35,7 @@ export const tokens = {
     display: "DMSerifDisplay_400Regular",
   },
   type: { micro: 11, caption: 12, body: 14, subtitle: 16, title: 20, heading: 28, display: 38 },
+  // AppShell and menu-card sizing must use the same dimensions to avoid viewport overflow.
   layout: {
     sidebar: 234,
     maxWidth: 1600,
@@ -49,6 +51,7 @@ export const tokens = {
   elevation: { card: 1, floating: 12 },
 } as const;
 
+/** Name semantic feedback states independently of their concrete palette values. */
 export type Tone =
   | "neutral"
   | "brand"
@@ -58,6 +61,7 @@ export type Tone =
   | "info"
   | "violet"
   | "orange";
+/** Pair foreground and background colors for badges and contextual feedback. */
 export const tones: Record<Tone, { fg: string; bg: string }> = {
   neutral: { fg: tokens.color.muted, bg: tokens.color.soft },
   brand: { fg: tokens.color.brand, bg: tokens.color.brandSoft },

@@ -32,6 +32,7 @@ import { useState } from "react";
 import { ScrollView, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+// Share one route list between the desktop sidebar and compact horizontal navigation.
 const navigation = [
   { path: "/", label: "Overview", icon: House },
   { path: "/orders", label: "Orders", icon: ReceiptText },
@@ -39,6 +40,7 @@ const navigation = [
   { path: "/crm", label: "Customers", icon: UsersRound },
   { path: "/settings", label: "Settings", icon: Settings2 },
 ] as const;
+/** Render one route with matching hover, selected, and accessibility states. */
 function NavItem({
   path,
   label,
@@ -94,18 +96,19 @@ function NavItem({
     </Interactive>
   );
 }
+/** Provide responsive navigation, workspace actions, safe-area spacing, and page content. */
 export function AppShell({ children }: { children: ReactNode }) {
-  const path = usePathname();
+  const currentPath = usePathname();
   const { width } = useWindowDimensions();
   const compact = width < t.layout.breakpoint;
   const insets = useSafeAreaInsets();
-  const settings = useGetSettings();
-  const [help, setHelp] = useState(false);
-  const [restaurant, setRestaurant] = useState(false);
-  const current =
-    path === "/ui-library"
+  const settingsQuery = useGetSettings();
+  const [isHelpVisible, setHelpVisible] = useState(false);
+  const [isRestaurantDetailsVisible, setRestaurantDetailsVisible] = useState(false);
+  const currentPageLabel =
+    currentPath === "/ui-library"
       ? "UI Library"
-      : (navigation.find((n) => n.path === path)?.label ?? "Overview");
+      : (navigation.find((route) => route.path === currentPath)?.label ?? "Overview");
   return (
     <View
       style={{
@@ -163,7 +166,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Interactive
             accessibilityRole="button"
             accessibilityLabel="Restaurant details"
-            onPress={() => setRestaurant(true)}
+            onPress={() => setRestaurantDetailsVisible(true)}
             style={{
               borderWidth: 1,
               borderColor: t.color.line,
@@ -178,7 +181,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               </View>
               <Stack gap={0} style={{ flex: 1 }}>
                 <Txt size={11} weight="semibold" lines={1}>
-                  {settings.data?.restaurantName ?? "Olive & Ember"}
+                  {settingsQuery.data?.restaurantName ?? "Olive & Ember"}
                 </Txt>
                 <Txt size={9} color={t.color.muted}>
                   Restaurant workspace
@@ -196,8 +199,8 @@ export function AppShell({ children }: { children: ReactNode }) {
             WORKSPACE
           </Txt>
           <Stack gap={6}>
-            {navigation.map((n) => (
-              <NavItem key={n.path} {...n} active={path === n.path} />
+            {navigation.map((route) => (
+              <NavItem key={route.path} {...route} active={currentPath === route.path} />
             ))}
           </Stack>
           <View
@@ -213,7 +216,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             path="/ui-library"
             label="UI Library"
             icon={Layers3}
-            active={path === "/ui-library"}
+            active={currentPath === "/ui-library"}
           />
           <View style={{ flex: 1, minHeight: 30 }} />
           <Card
@@ -240,7 +243,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Button
                 variant="secondary"
                 small
-                onPress={() => setHelp(true)}
+                onPress={() => setHelpVisible(true)}
                 icon={<ArrowUpRight size={13} color={t.color.brand} />}
               >
                 Workspace guide
@@ -290,15 +293,15 @@ export function AppShell({ children }: { children: ReactNode }) {
             )}
             {!compact ? <Txt color={t.color.subtle}>/</Txt> : null}
             <Txt size={12} weight="medium">
-              {current}
+              {currentPageLabel}
             </Txt>
           </Row>
           <Row gap={16}>
             {width > 600 ? (
-              <Badge tone={settings.data?.acceptingOrders ? "success" : "warning"} dot>
-                {settings.data?.acceptingOrders
+              <Badge tone={settingsQuery.data?.acceptingOrders ? "success" : "warning"} dot>
+                {settingsQuery.data?.acceptingOrders
                   ? "Accepting orders"
-                  : settings.data
+                  : settingsQuery.data
                     ? "Orders paused"
                     : "Connecting"}
               </Badge>
@@ -315,7 +318,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               small
               label="Workspace help"
               icon={<CircleHelp size={18} color={t.color.muted} />}
-              onPress={() => setHelp(true)}
+              onPress={() => setHelpVisible(true)}
             />
           </Row>
         </Row>
@@ -332,14 +335,15 @@ export function AppShell({ children }: { children: ReactNode }) {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={{ padding: 8, gap: 4 }}
             >
-              {navigation.map((n) => (
-                <NavItem key={n.path} {...n} compact active={path === n.path} />
+              {/* Keep route overflow inside the navigation strip on narrow screens. */}
+              {navigation.map((route) => (
+                <NavItem key={route.path} {...route} compact active={currentPath === route.path} />
               ))}
               <NavItem
                 path="/ui-library"
                 label="UI Library"
                 icon={Layers3}
-                active={path === "/ui-library"}
+                active={currentPath === "/ui-library"}
                 compact
               />
             </ScrollView>
@@ -355,7 +359,8 @@ export function AppShell({ children }: { children: ReactNode }) {
             alignSelf: "center",
           }}
         >
-          <View key={path}>{children}</View>
+          {/* Reset page-local form and dialog state when navigating to a different route. */}
+          <View key={currentPath}>{children}</View>
           <Row wrap style={{ marginTop: 32, justifyContent: "space-between" }}>
             <Txt size={10} color={t.color.subtle}>
               A good day starts with a little order.
@@ -367,10 +372,10 @@ export function AppShell({ children }: { children: ReactNode }) {
         </ScrollView>
       </View>
       <Dialog
-        visible={help}
+        visible={isHelpVisible}
         title="Your workspace, at a glance"
         subtitle="A calmer way to run a busy restaurant."
-        onClose={() => setHelp(false)}
+        onClose={() => setHelpVisible(false)}
       >
         <Stack gap={20}>
           {[
@@ -394,9 +399,9 @@ export function AppShell({ children }: { children: ReactNode }) {
               "See the bigger picture",
               "Completed orders update revenue and customer spend. Settings control new orders.",
             ],
-          ].map(([n, title, body]) => (
-            <Row key={n} style={{ alignItems: "flex-start" }}>
-              <Badge tone="brand">{n}</Badge>
+          ].map(([stepNumber, title, body]) => (
+            <Row key={stepNumber} style={{ alignItems: "flex-start" }}>
+              <Badge tone="brand">{stepNumber}</Badge>
               <Stack gap={3} style={{ flex: 1 }}>
                 <Txt weight="semibold">{title}</Txt>
                 <Txt size={12} color={t.color.muted}>
@@ -408,14 +413,14 @@ export function AppShell({ children }: { children: ReactNode }) {
         </Stack>
       </Dialog>
       <Dialog
-        visible={restaurant}
-        title={settings.data?.restaurantName ?? "Olive & Ember"}
+        visible={isRestaurantDetailsVisible}
+        title={settingsQuery.data?.restaurantName ?? "Olive & Ember"}
         subtitle="Restaurant workspace"
-        onClose={() => setRestaurant(false)}
+        onClose={() => setRestaurantDetailsVisible(false)}
       >
         <Stack gap={16}>
-          <Badge tone={settings.data?.acceptingOrders ? "success" : "warning"} dot>
-            {settings.data?.acceptingOrders ? "Accepting new orders" : "New orders paused"}
+          <Badge tone={settingsQuery.data?.acceptingOrders ? "success" : "warning"} dot>
+            {settingsQuery.data?.acceptingOrders ? "Accepting new orders" : "New orders paused"}
           </Badge>
           <Txt color={t.color.muted}>
             Manage service availability, preparation time, opening hours and ordering preferences in
@@ -423,7 +428,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </Txt>
           <Button
             onPress={() => {
-              setRestaurant(false);
+              setRestaurantDetailsVisible(false);
               router.push("/settings");
             }}
           >
