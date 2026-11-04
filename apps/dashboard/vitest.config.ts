@@ -1,3 +1,4 @@
+/** Run pure frontend business-rule tests without booting Expo or a browser. */
 import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {

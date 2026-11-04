@@ -3,6 +3,7 @@ import type { Database } from "../db/client";
 import { categories, menuItems, orderItems } from "../db/schema";
 import { DomainError } from "./errors";
 
+/** Keep the missing-item response consistent across menu lifecycle commands. */
 const menuItemNotFound = () =>
   new DomainError(404, "ITEM_NOT_FOUND", "This menu item could not be found.");
 

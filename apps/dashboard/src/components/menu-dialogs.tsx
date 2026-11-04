@@ -185,6 +185,7 @@ export function CategoryDialog({
   const [name, setName] = useState(category?.name ?? "");
   const [sortOrder, setSortOrder] = useState(String(category?.sortOrder ?? 0));
   const [error, setError] = useState("");
+  /** Validate the category label and display order before invoking the shared save handler. */
   const submit = async () => {
     setError("");
     if (name.trim().length < 2) return setError("Use at least 2 characters for the category name.");

@@ -3,6 +3,7 @@
   "name": "odyssey-restaurant-api",
   "main": "src/index.ts",
   "compatibility_date": "2026-11-01",
+  // The PostgreSQL driver uses Node-compatible APIs in the Worker runtime.
   "compatibility_flags": ["nodejs_compat"],
   "vars": { "ALLOWED_ORIGINS": "http://localhost:8081,http://127.0.0.1:8081" },
   "observability": { "enabled": true }

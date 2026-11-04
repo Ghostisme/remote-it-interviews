@@ -492,6 +492,7 @@ export function Dialog({
   if (Platform.OS === "web" && visible && !wasVisibleRef.current)
     previouslyFocusedElementRef.current = document.activeElement as HTMLElement | null;
   wasVisibleRef.current = visible;
+  /** Return focus to the opening control when it still exists. */
   const restorePreviousFocus = () => {
     if (previouslyFocusedElementRef.current?.isConnected)
       previouslyFocusedElementRef.current.focus();
@@ -516,6 +517,7 @@ export function Dialog({
           )) as HTMLElement | null
       )?.focus();
     }, 0);
+    /** Handle Escape and keyboard traversal only for the topmost visible dialog. */
     const handleDialogKeyDown = (event: KeyboardEvent) => {
       if (openDialogIds[openDialogIds.length - 1] !== dialogId) return;
       if (event.key === "Escape") {

@@ -33,8 +33,10 @@ export function useSettingsForm(settings: Settings) {
   const queryClient = useQueryClient();
   const toast = useToast();
   const isDirty = JSON.stringify(draft) !== savedDraftSnapshot;
+  /** Update one typed draft field while preserving the other local edits. */
   const setField = <K extends keyof typeof draft>(key: K, value: (typeof draft)[K]) =>
     setDraft((current) => ({ ...current, [key]: value }));
+  /** Discard local edits and restore the last loaded restaurant settings. */
   const reset = () => {
     const savedDraft = createSettingsDraft(settings);
     setDraft(savedDraft);
@@ -43,6 +45,7 @@ export function useSettingsForm(settings: Settings) {
   };
   useEffect(() => {
     if (Platform.OS !== "web" || !isDirty) return;
+    /** Request the browser navigation prompt while unsaved edits exist. */
     const warnBeforeUnload = (event: BeforeUnloadEvent) => {
       event.preventDefault();
       event.returnValue = "";
@@ -50,6 +53,7 @@ export function useSettingsForm(settings: Settings) {
     window.addEventListener("beforeunload", warnBeforeUnload);
     return () => window.removeEventListener("beforeunload", warnBeforeUnload);
   }, [isDirty]);
+  /** Validate display values, convert stored units, and save the new draft baseline. */
   const save = async () => {
     setError("");
     if (draft.restaurantName.trim().length < 2)

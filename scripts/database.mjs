@@ -1,3 +1,4 @@
+/** Start or stop the checkout-owned PostgreSQL cluster without using another local database service. */
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
@@ -15,49 +16,54 @@ import { join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
 
-const root = resolve(fileURLToPath(new URL("../", import.meta.url)));
+const workspaceRoot = resolve(fileURLToPath(new URL("../", import.meta.url)));
 // An ASCII junction works around PostgreSQL bootstrap paths on Windows.
-let toolRoot = root;
+let postgresToolRoot = workspaceRoot;
 if (process.platform === "win32") {
-  toolRoot = resolve(
+  postgresToolRoot = resolve(
     tmpdir(),
-    `odyssey-${createHash("sha256").update(root).digest("hex").slice(0, 12)}`,
+    `odyssey-${createHash("sha256").update(workspaceRoot).digest("hex").slice(0, 12)}`,
   );
-  if (!existsSync(toolRoot)) symlinkSync(root, toolRoot, "junction");
-  if (realpathSync(toolRoot).toLowerCase() !== realpathSync(root).toLowerCase())
+  if (!existsSync(postgresToolRoot)) symlinkSync(workspaceRoot, postgresToolRoot, "junction");
+  if (realpathSync(postgresToolRoot).toLowerCase() !== realpathSync(workspaceRoot).toLowerCase())
     throw new Error("Database junction points to another checkout.");
 }
-const databaseDir = resolve(toolRoot, ".local/postgres");
-const native = await import(
+const databaseDirectory = resolve(postgresToolRoot, ".local/postgres");
+const postgresBinaries = await import(
   `@embedded-postgres/${process.platform === "win32" ? "windows" : process.platform}-${process.arch}`
 );
-const binary = (path) => join(toolRoot, relative(root, path));
-const pgCtl = binary(native.pg_ctl);
-const run = (path, args) => execFileSync(path, args, { stdio: "inherit", windowsHide: true });
+/** Translate a package binary path through the Windows-compatible checkout junction. */
+const resolveBinaryPath = (binaryPath) =>
+  join(postgresToolRoot, relative(workspaceRoot, binaryPath));
+const pgCtlPath = resolveBinaryPath(postgresBinaries.pg_ctl);
+/** Run PostgreSQL tools with inherited logs and no extra Windows console window. */
+const runPostgresCommand = (binaryPath, commandArguments) =>
+  execFileSync(binaryPath, commandArguments, { stdio: "inherit", windowsHide: true });
 
 if (process.argv[2] === "down") {
-  if (!existsSync(resolve(databaseDir, "postmaster.pid")))
+  if (!existsSync(resolve(databaseDirectory, "postmaster.pid")))
     console.log("Odyssey's local database is already stopped.");
   else {
-    run(pgCtl, ["-D", databaseDir, "-m", "fast", "-w", "stop"]);
+    runPostgresCommand(pgCtlPath, ["-D", databaseDirectory, "-m", "fast", "-w", "stop"]);
     console.log("Stopped Odyssey's project-local PostgreSQL cluster.");
   }
 } else {
-  mkdirSync(resolve(root, ".local"), { recursive: true });
-  if (!existsSync(resolve(root, ".env")))
-    copyFileSync(resolve(root, ".env.example"), resolve(root, ".env"));
-  if (!existsSync(resolve(root, "services/backend/.dev.vars")))
+  mkdirSync(resolve(workspaceRoot, ".local"), { recursive: true });
+  if (!existsSync(resolve(workspaceRoot, ".env")))
+    copyFileSync(resolve(workspaceRoot, ".env.example"), resolve(workspaceRoot, ".env"));
+  if (!existsSync(resolve(workspaceRoot, "services/backend/.dev.vars")))
     copyFileSync(
-      resolve(root, "services/backend/.dev.vars.example"),
-      resolve(root, "services/backend/.dev.vars"),
+      resolve(workspaceRoot, "services/backend/.dev.vars.example"),
+      resolve(workspaceRoot, "services/backend/.dev.vars"),
     );
-  if (!existsSync(resolve(databaseDir, "PG_VERSION"))) {
-    const passwordFile = resolve(toolRoot, ".local/init-password");
+  if (!existsSync(resolve(databaseDirectory, "PG_VERSION"))) {
+    // Bootstrap credentials exist only for initialization and are removed even if initdb fails.
+    const passwordFile = resolve(postgresToolRoot, ".local/init-password");
     writeFileSync(passwordFile, "odyssey_local", { mode: 0o600 });
     try {
-      run(binary(native.initdb), [
+      runPostgresCommand(resolveBinaryPath(postgresBinaries.initdb), [
         "-D",
-        databaseDir,
+        databaseDirectory,
         "-U",
         "odyssey",
         `--pwfile=${passwordFile}`,
@@ -70,48 +76,56 @@ if (process.argv[2] === "down") {
     }
   }
   const connectionString = "postgresql://odyssey:odyssey_local@127.0.0.1:55432/postgres";
-  const probe = new pg.Client({ connectionString, connectionTimeoutMillis: 2000 });
+  const connectionProbe = new pg.Client({ connectionString, connectionTimeoutMillis: 2000 });
   let alreadyRunning = false;
   try {
-    await probe.connect();
+    await connectionProbe.connect();
     alreadyRunning = true;
   } catch {
-    /* Dedicated local port. */
+    // An unreachable dedicated port means this checkout may need to start its cluster.
   } finally {
-    await probe.end();
+    await connectionProbe.end();
   }
   if (!alreadyRunning)
-    run(pgCtl, [
+    runPostgresCommand(pgCtlPath, [
       "-D",
-      databaseDir,
+      databaseDirectory,
       "-l",
-      resolve(toolRoot, ".local/postgres.log"),
+      resolve(postgresToolRoot, ".local/postgres.log"),
       "-o",
       "-p 55432 -h 127.0.0.1",
       "-w",
       "start",
     ]);
-  const owner = new pg.Client({ connectionString });
-  await owner.connect();
+  const bootstrapClient = new pg.Client({ connectionString });
+  await bootstrapClient.connect();
   try {
-    const result = await owner.query("SHOW data_directory");
+    // Verify ownership before issuing any CREATE DATABASE statement on the listening server.
+    const dataDirectoryResult = await bootstrapClient.query("SHOW data_directory");
     if (
-      realpathSync(result.rows[0].data_directory).toLowerCase() !==
-      realpathSync(databaseDir).toLowerCase()
+      realpathSync(dataDirectoryResult.rows[0].data_directory).toLowerCase() !==
+      realpathSync(databaseDirectory).toLowerCase()
     )
       throw new Error(
         "Port 55432 belongs to another PostgreSQL cluster. No database changes were made.",
       );
-    for (const database of ["odyssey", "odyssey_test"]) {
-      const found = await owner.query("SELECT 1 FROM pg_database WHERE datname = $1", [database]);
-      if (!found.rowCount) await owner.query(`CREATE DATABASE "${database}"`);
+    // These fixed identifiers are the only databases this bootstrap can create.
+    for (const databaseName of ["odyssey", "odyssey_test"]) {
+      const existingDatabase = await bootstrapClient.query(
+        "SELECT 1 FROM pg_database WHERE datname = $1",
+        [databaseName],
+      );
+      if (!existingDatabase.rowCount)
+        await bootstrapClient.query(`CREATE DATABASE "${databaseName}"`);
     }
   } finally {
-    await owner.end();
+    await bootstrapClient.end();
   }
-  const pid = Number(readFileSync(resolve(databaseDir, "postmaster.pid"), "utf8").split("\n")[0]);
+  const processId = Number(
+    readFileSync(resolve(databaseDirectory, "postmaster.pid"), "utf8").split("\n")[0],
+  );
   console.log(
-    `PostgreSQL ready at 127.0.0.1:55432 (PID ${pid}). Databases: odyssey, odyssey_test.`,
+    `PostgreSQL ready at 127.0.0.1:55432 (PID ${processId}). Databases: odyssey, odyssey_test.`,
   );
   console.log("Data lives in .local/postgres. No existing databases or services are used.");
 }

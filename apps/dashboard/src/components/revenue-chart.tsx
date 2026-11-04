@@ -40,7 +40,7 @@ export function RevenueChart({ daily }: { daily: Summary["daily"] }) {
   const firstPoint = points[0];
   const lastPoint = points[points.length - 1];
   const selectedPoint = selectedDayIndex === null ? null : points[selectedDayIndex];
-  // API buckets are UTC dates; local timezone conversion would shift some day labels.
+  /** Format UTC day buckets without shifting labels into the browser's local date. */
   const formatUtcDate = (value: string) =>
     new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" }).format(
       new Date(`${value}T00:00:00Z`),

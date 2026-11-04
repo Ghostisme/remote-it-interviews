@@ -1,7 +1,8 @@
+/** Export the validated route contracts as the single OpenAPI input for generated frontend hooks. */
 import { writeFileSync } from "node:fs";
 import { createApp } from "../src/app";
 
-const document = createApp().getOpenAPIDocument({
+const openApiDocument = createApp().getOpenAPIDocument({
   openapi: "3.0.3",
   info: {
     title: "Odyssey Restaurant API",
@@ -12,6 +13,6 @@ const document = createApp().getOpenAPIDocument({
 });
 writeFileSync(
   new URL("../openapi.json", import.meta.url),
-  `${JSON.stringify(document, null, 2)}\n`,
+  `${JSON.stringify(openApiDocument, null, 2)}\n`,
 );
-console.log(`Generated OpenAPI: ${Object.keys(document.paths ?? {}).length} paths.`);
+console.log(`Generated OpenAPI: ${Object.keys(openApiDocument.paths ?? {}).length} paths.`);

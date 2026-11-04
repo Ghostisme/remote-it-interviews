@@ -22,6 +22,7 @@ export function useMenuLifecycle(item: MenuItem, action: MenuAction, onDone: () 
   const queryClient = useQueryClient();
   const toast = useToast();
   const [error, setError] = useState("");
+  /** Run the confirmed lifecycle command and refresh dependent menu and order data. */
   const submit = async () => {
     setError("");
     try {
@@ -62,6 +63,7 @@ export function useCategoryManagement() {
   const deleteCategoryMutation = useDeleteCategory();
   const queryClient = useQueryClient();
   const toast = useToast();
+  /** Persist a category label and display order while keeping its identity stable. */
   const save = async (category: Category, name: string, sortOrder = category.sortOrder) => {
     await updateCategoryMutation.mutateAsync({
       id: category.id,
@@ -70,7 +72,7 @@ export function useCategoryManagement() {
     await queryClient.invalidateQueries();
     toast("Category updated. Dishes keep their category and order history.");
   };
-  // The API rechecks active and archived dishes to handle concurrent menu edits.
+  /** Request deletion of an empty category; the API rechecks active and archived dish references. */
   const deleteCategory = async (category: Category) => {
     await deleteCategoryMutation.mutateAsync({ id: category.id });
     await queryClient.invalidateQueries();

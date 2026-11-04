@@ -1,8 +1,10 @@
+/** Run desktop Chromium and touch-enabled mobile WebKit scenarios against the separate web and API servers. */
 import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: false,
+  // Workflows share restaurant preferences and restore them after each scenario.
   workers: 1,
   timeout: 90000,
   expect: { timeout: 12000 },

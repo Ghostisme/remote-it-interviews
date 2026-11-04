@@ -31,6 +31,7 @@ export function useOrderDraft(onCreated: (orderId: string) => void) {
   const preview = settingsQuery.data
     ? calculateOrderPreview(cart, menuQuery.data?.items ?? [], settingsQuery.data, fulfillment)
     : null;
+  /** Validate the basket and create an order using the retry-safe draft identity. */
   const submit = async () => {
     setError("");
     if (!customerId) return setError("Choose a customer for this order.");

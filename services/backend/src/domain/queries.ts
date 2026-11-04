@@ -117,7 +117,7 @@ export async function getSettings(db: Database) {
     throw new DomainError(503, "NOT_INITIALIZED", "Run pnpm db:seed to initialize the restaurant.");
   return restaurantSettings;
 }
-// No previous activity has no meaningful percentage comparison; the UI renders null as a dash.
+/** Report a one-decimal percentage change, or null when the previous period had no activity. */
 const calculatePercentageChange = (current: number, previous: number) =>
   previous ? Math.round(((current - previous) / previous) * 1000) / 10 : null;
 /** Build UTC day buckets and compare the selected period with the preceding equal-length period. */

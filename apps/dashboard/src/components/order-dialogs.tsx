@@ -334,6 +334,7 @@ export function OrderDetailDialog({ id: orderId, onClose }: { id: string; onClos
   const [isConfirmingCancellation, setConfirmingCancellation] = useState(false);
   const [cancellationReason, setCancellationReason] = useState("");
   const detail = orderQuery.data;
+  /** Submit an action with the displayed order version and refresh any conflicting state. */
   const applyOrderAction = async (action: OrderAction) => {
     if (!detail) return;
     setError("");

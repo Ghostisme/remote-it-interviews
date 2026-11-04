@@ -31,6 +31,7 @@ export function useMenuForm(
   const updateMenuItemMutation = useUpdateMenuItem();
   const queryClient = useQueryClient();
   const toast = useToast();
+  /** Validate the dish draft, convert its price to cents, and create or update the item. */
   const save = async () => {
     setError("");
     const priceCents = parseDecimalToHundredths(price);
@@ -84,7 +85,7 @@ export function useMenuActions() {
   const createCategoryMutation = useCreateCategory();
   const toast = useToast();
   const queryClient = useQueryClient();
-  // Sold-out status is temporary; archiving uses a separate confirmation flow.
+  /** Toggle temporary sold-out status without changing the dish's archive lifecycle. */
   const toggle = async (item: MenuItem) => {
     try {
       await updateMenuItemMutation.mutateAsync({
@@ -97,6 +98,7 @@ export function useMenuActions() {
       toast(errorMessage(error), "danger");
     }
   };
+  /** Create a category and return its persisted row to the calling form. */
   const addCategory = async (name: string) => {
     const result = await createCategoryMutation.mutateAsync({ data: { name: name.trim() } });
     await queryClient.invalidateQueries();

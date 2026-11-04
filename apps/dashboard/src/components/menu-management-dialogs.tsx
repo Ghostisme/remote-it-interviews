@@ -100,6 +100,7 @@ export function CategoryManagerDialog({
   const [editing, setEditing] = useState<Category | null>(null);
   const [removing, setRemoving] = useState<Category | null>(null);
   const [error, setError] = useState("");
+  /** Delete the confirmed empty category and keep the dialog open if the API rejects it. */
   const remove = async () => {
     if (!removing) return;
     setError("");

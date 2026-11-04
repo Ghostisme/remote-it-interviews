@@ -40,6 +40,7 @@ export default function OrdersScreen() {
     if (params.new === "1") setCreatingOrder(true);
     if (params.id) setSelectedOrderId(params.id);
   }, [params.new, params.id]);
+  /** Dismiss order workflows and clear the completed dialog intent from the URL. */
   const closeOrderDialogs = () => {
     setCreatingOrder(false);
     setSelectedOrderId(null);

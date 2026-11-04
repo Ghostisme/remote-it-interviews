@@ -1,3 +1,4 @@
+/** Verify the complete restaurant workflow through the browser against the real API and PostgreSQL. */
 import { existsSync } from "node:fs";
 import { expect, type Page, type Response, test } from "@playwright/test";
 import pg from "pg";
@@ -12,7 +13,7 @@ import type {
   UpdateSettings,
 } from "../../packages/api-client/src/generated/model";
 
-const api = "http://localhost:8787/api";
+const apiBaseUrl = "http://localhost:8787/api";
 if (existsSync(".env")) process.loadEnvFile(".env");
 const databaseUrl =
   process.env.DATABASE_URL ?? "postgresql://odyssey:odyssey_local@127.0.0.1:55432/odyssey";
@@ -20,14 +21,16 @@ const databaseUrl =
 if (new URL(databaseUrl).pathname !== "/odyssey")
   throw new Error("Browser tests require the dedicated odyssey demo database.");
 
-async function responseFrom(
+/** Start listening before the UI action, then assert the matching API request succeeded. */
+async function expectApiResponse(
   page: Page,
   path: string,
   method: string,
   action: () => Promise<unknown>,
 ): Promise<Response> {
   const response = page.waitForResponse(
-    (r) => r.url() === `${api}${path}` && r.request().method() === method,
+    (apiResponse) =>
+      apiResponse.url() === `${apiBaseUrl}${path}` && apiResponse.request().method() === method,
   );
   await action();
   const result = await response;
@@ -35,7 +38,8 @@ async function responseFrom(
   return result;
 }
 
-async function setSwitch(page: Page, name: string, value: boolean) {
+/** Set a switch idempotently without assuming the saved restaurant preference. */
+async function setSwitchValue(page: Page, name: string, value: boolean) {
   const control = page.getByRole("switch", { name, exact: true });
   await expect(control).toBeVisible();
   if ((await control.getAttribute("aria-checked")) !== String(value)) await control.click();
@@ -45,8 +49,8 @@ test("menu → customer → settings → delivery → kitchen → CRM → revenu
   page,
   request,
 }) => {
-  const original: Settings = await (await request.get(`${api}/settings`)).json();
-  const before: Summary = await (await request.get(`${api}/summary?days=7`)).json();
+  const original: Settings = await (await request.get(`${apiBaseUrl}/settings`)).json();
+  const before: Summary = await (await request.get(`${apiBaseUrl}/summary?days=7`)).json();
   const suffix = Date.now();
   const dishName = `Seasonal flatbread ${suffix}`;
   const guestName = `Jamie Review ${suffix}`;
@@ -66,7 +70,7 @@ test("menu → customer → settings → delivery → kitchen → CRM → revenu
         .getByRole("textbox", { name: "Category name", exact: true })
         .fill(`Seasonal ${suffix}`);
       const category: Category = await (
-        await responseFrom(page, "/categories", "POST", () =>
+        await expectApiResponse(page, "/categories", "POST", () =>
           page.getByRole("button", { name: "Create category", exact: true }).click(),
         )
       ).json();
@@ -84,7 +88,7 @@ test("menu → customer → settings → delivery → kitchen → CRM → revenu
       await page.getByRole("button", { name: category.name, exact: true }).click();
       await page.getByRole("button", { name: "Use Pizza cover", exact: true }).click();
       const item: MenuItem = await (
-        await responseFrom(page, "/menu", "POST", () =>
+        await expectApiResponse(page, "/menu", "POST", () =>
           page
             .getByRole("dialog", { name: "Something new on the menu", exact: true })
             .getByRole("button", { name: "Add menu item", exact: true })
@@ -104,7 +108,7 @@ test("menu → customer → settings → delivery → kitchen → CRM → revenu
       await page.getByRole("button", { name: `Edit ${dishName}`, exact: true }).click();
       await page.getByRole("textbox", { name: "Price (USD)", exact: true }).fill("12.75");
       const edited: MenuItem = await (
-        await responseFrom(page, `/menu/${item.id}`, "PATCH", () =>
+        await expectApiResponse(page, `/menu/${item.id}`, "PATCH", () =>
           page.getByRole("button", { name: "Save menu item", exact: true }).click(),
         )
       ).json();
@@ -114,7 +118,7 @@ test("menu → customer → settings → delivery → kitchen → CRM → revenu
       ).toBeHidden();
       await expect(menuSearch).toHaveValue(dishName);
       await expect(page.getByText("$12.75", { exact: true })).toBeVisible();
-      await responseFrom(page, `/menu/${item.id}`, "PATCH", () =>
+      await expectApiResponse(page, `/menu/${item.id}`, "PATCH", () =>
         page.getByRole("switch", { name: "Available", exact: true }).click(),
       );
       await page.getByRole("button", { name: "New order", exact: true }).click();
@@ -125,7 +129,7 @@ test("menu → customer → settings → delivery → kitchen → CRM → revenu
       await page.getByRole("button", { name: "Cancel", exact: true }).click();
       await page.getByRole("link", { name: "Menu", exact: true }).click();
       await page.getByRole("textbox", { name: "Search your menu...", exact: true }).fill(dishName);
-      await responseFrom(page, `/menu/${item.id}`, "PATCH", () =>
+      await expectApiResponse(page, `/menu/${item.id}`, "PATCH", () =>
         page.getByRole("switch", { name: "Available", exact: true }).click(),
       );
       await expect(page.getByRole("switch", { name: "Available", exact: true })).toBeChecked();
@@ -140,7 +144,7 @@ test("menu → customer → settings → delivery → kitchen → CRM → revenu
         .fill(`review-${suffix}@example.com`);
       await page.getByRole("textbox", { name: "Phone number", exact: true }).fill("+1 555 0199");
       const customer: Customer = await (
-        await responseFrom(page, "/customers", "POST", () =>
+        await expectApiResponse(page, "/customers", "POST", () =>
           page
             .getByRole("dialog", { name: "A new face at the table", exact: true })
             .getByRole("button", { name: "Add customer", exact: true })
@@ -155,7 +159,7 @@ test("menu → customer → settings → delivery → kitchen → CRM → revenu
       await page
         .getByRole("textbox", { name: "Guest notes", exact: true })
         .fill("Prefers a quiet table. No peanuts.");
-      await responseFrom(page, `/customers/${customer.id}`, "PATCH", () =>
+      await expectApiResponse(page, `/customers/${customer.id}`, "PATCH", () =>
         page.getByRole("button", { name: "Save customer", exact: true }).click(),
       );
       await expect(
@@ -166,16 +170,16 @@ test("menu → customer → settings → delivery → kitchen → CRM → revenu
 
     await test.step("Save pricing settings and confirm pausing blocks checkout", async () => {
       await page.getByRole("link", { name: "Settings", exact: true }).click();
-      await setSwitch(page, "Auto-accept orders", false);
-      await setSwitch(page, "Delivery", true);
-      await setSwitch(page, "Accepting orders", false);
+      await setSwitchValue(page, "Auto-accept orders", false);
+      await setSwitchValue(page, "Delivery", true);
+      await setSwitchValue(page, "Accepting orders", false);
       await page.getByRole("textbox", { name: "Delivery fee (USD)", exact: true }).fill("4.50");
       await page
         .getByRole("textbox", { name: "Minimum order subtotal (USD)", exact: true })
         .fill("0.00");
       await page.getByRole("textbox", { name: "Tax rate (%)", exact: true }).fill("8.25");
       const saved: Settings = await (
-        await responseFrom(page, "/settings", "PATCH", () =>
+        await expectApiResponse(page, "/settings", "PATCH", () =>
           page.getByRole("button", { name: "Save changes", exact: true }).first().click(),
         )
       ).json();
@@ -194,8 +198,8 @@ test("menu → customer → settings → delivery → kitchen → CRM → revenu
       await expect(page.getByRole("button", { name: "Place order", exact: true })).toBeDisabled();
       await page.getByRole("button", { name: "Cancel", exact: true }).click();
       await page.getByRole("link", { name: "Settings", exact: true }).click();
-      await setSwitch(page, "Accepting orders", true);
-      await responseFrom(page, "/settings", "PATCH", () =>
+      await setSwitchValue(page, "Accepting orders", true);
+      await expectApiResponse(page, "/settings", "PATCH", () =>
         page.getByRole("button", { name: "Save changes", exact: true }).first().click(),
       );
     });
@@ -208,7 +212,7 @@ test("menu → customer → settings → delivery → kitchen → CRM → revenu
       await expect
         .poll(async () => {
           const response = await request.get(
-            `${api}/customers?search=${encodeURIComponent(guestName)}`,
+            `${apiBaseUrl}/customers?search=${encodeURIComponent(guestName)}`,
           );
           return (await response.json()).data.length;
         })
@@ -227,7 +231,7 @@ test("menu → customer → settings → delivery → kitchen → CRM → revenu
         .getByRole("textbox", { name: "Order notes", exact: true })
         .fill("Please ring the doorbell. No peanuts.");
       const detail: OrderDetail = await (
-        await responseFrom(page, "/orders", "POST", () =>
+        await expectApiResponse(page, "/orders", "POST", () =>
           page.getByRole("button", { name: "Place order · $32.10", exact: true }).click(),
         )
       ).json();
@@ -248,12 +252,14 @@ test("menu → customer → settings → delivery → kitchen → CRM → revenu
 
     await test.step("Progress through the allowed kitchen actions and verify history", async () => {
       for (const label of ["Accept order", "Start preparing", "Mark ready", "Complete order"]) {
-        await responseFrom(page, `/orders/${orderId}/actions`, "POST", () =>
+        await expectApiResponse(page, `/orders/${orderId}/actions`, "POST", () =>
           page.getByRole("button", { name: label, exact: true }).click(),
         );
         await expect(page.getByRole("button", { name: label, exact: true })).toBeHidden();
       }
-      const detail: OrderDetail = await (await request.get(`${api}/orders/${orderId}`)).json();
+      const detail: OrderDetail = await (
+        await request.get(`${apiBaseUrl}/orders/${orderId}`)
+      ).json();
       expect(detail.order.status).toBe("completed");
       expect(detail.allowedActions).toEqual([]);
       expect(detail.events).toHaveLength(5);
@@ -274,7 +280,7 @@ test("menu → customer → settings → delivery → kitchen → CRM → revenu
       const detail = page.getByRole("dialog", { name: "A familiar face", exact: true });
       await expect(detail.getByText("$32.10", { exact: true }).first()).toBeVisible();
       const customer: CustomerDetail = await (
-        await request.get(`${api}/customers/${customerId}`)
+        await request.get(`${apiBaseUrl}/customers/${customerId}`)
       ).json();
       expect(customer.customer.spendCents).toBe(3210);
       expect(customer.customer.orderCount).toBe(1);
@@ -285,7 +291,7 @@ test("menu → customer → settings → delivery → kitchen → CRM → revenu
 
     await test.step("Confirm Home aggregates and exercise the reporting chart", async () => {
       await page.getByRole("link", { name: "Overview", exact: true }).click();
-      const after: Summary = await (await request.get(`${api}/summary?days=7`)).json();
+      const after: Summary = await (await request.get(`${apiBaseUrl}/summary?days=7`)).json();
       expect(after.revenueCents).toBe(before.revenueCents + 3210);
       expect(after.orderCount).toBe(before.orderCount + 1);
       await expect(page.getByText("A good day, in the making.", { exact: true })).toBeVisible();
@@ -304,41 +310,47 @@ test("menu → customer → settings → delivery → kitchen → CRM → revenu
       expect(browserErrors).toEqual([]);
     });
   } finally {
+    // Restore shared preferences and delete only the exact fixture IDs created by this scenario.
     const { id: _id, updatedAt: _updatedAt, ...restore } = original;
-    const restored = await request.patch(`${api}/settings`, {
+    const restored = await request.patch(`${apiBaseUrl}/settings`, {
       data: { ...restore, currency: "USD" } satisfies UpdateSettings,
     });
     expect(restored.ok(), "Restore original restaurant settings").toBeTruthy();
-    const client = new pg.Client({ connectionString: databaseUrl });
-    await client.connect();
+    const cleanupClient = new pg.Client({ connectionString: databaseUrl });
+    await cleanupClient.connect();
     try {
       // Parameterized exact IDs, never truncation or a name-pattern deletion.
-      if (orderId) await client.query("DELETE FROM orders WHERE id = $1", [orderId]);
-      if (menuItemId) await client.query("DELETE FROM menu_items WHERE id = $1", [menuItemId]);
-      if (customerId) await client.query("DELETE FROM customers WHERE id = $1", [customerId]);
-      if (categoryId) await client.query("DELETE FROM categories WHERE id = $1", [categoryId]);
+      if (orderId) await cleanupClient.query("DELETE FROM orders WHERE id = $1", [orderId]);
+      if (menuItemId)
+        await cleanupClient.query("DELETE FROM menu_items WHERE id = $1", [menuItemId]);
+      if (customerId)
+        await cleanupClient.query("DELETE FROM customers WHERE id = $1", [customerId]);
+      if (categoryId)
+        await cleanupClient.query("DELETE FROM categories WHERE id = $1", [categoryId]);
     } finally {
-      await client.end();
+      await cleanupClient.end();
     }
   }
 });
 
 test("menu loading, empty search, API error and retry are usable", async ({ page }) => {
-  let release = () => {};
-  const gate = new Promise<void>((resolve) => {
-    release = resolve;
+  // Gate one response to observe loading without relying on an arbitrary sleep.
+  /** Release the intercepted menu response after the loading state has been asserted. */
+  let releaseMenuResponse = () => {};
+  const menuResponseGate = new Promise<void>((resolve) => {
+    releaseMenuResponse = resolve;
   });
-  await page.route(`${api}/menu`, async (route) => {
-    await gate;
+  await page.route(`${apiBaseUrl}/menu`, async (route) => {
+    await menuResponseGate;
     await route.continue();
   });
   await page.goto("/menu");
   await expect(page.getByLabel("Loading", { exact: true }).first()).toBeVisible();
-  release();
+  releaseMenuResponse();
   await expect(
     page.getByRole("button", { name: "Edit Burrata garden salad", exact: true }),
   ).toBeVisible();
-  await page.unroute(`${api}/menu`);
+  await page.unroute(`${apiBaseUrl}/menu`);
   await page
     .getByRole("textbox", { name: "Search your menu...", exact: true })
     .fill("no-such-dish-zzzz");
@@ -347,7 +359,7 @@ test("menu loading, empty search, API error and retry are usable", async ({ page
   await expect(
     page.getByRole("button", { name: "Edit Burrata garden salad", exact: true }),
   ).toBeVisible();
-  await page.route(`${api}/menu`, (route) =>
+  await page.route(`${apiBaseUrl}/menu`, (route) =>
     route.fulfill({
       status: 503,
       json: {
@@ -363,7 +375,7 @@ test("menu loading, empty search, API error and retry are usable", async ({ page
   await expect(
     page.getByText("The kitchen connection is temporarily unavailable.", { exact: true }),
   ).toBeVisible();
-  await page.unroute(`${api}/menu`);
+  await page.unroute(`${apiBaseUrl}/menu`);
   await page.getByRole("button", { name: "Try again", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Edit Burrata garden salad", exact: true }),

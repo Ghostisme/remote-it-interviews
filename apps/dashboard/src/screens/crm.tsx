@@ -42,6 +42,7 @@ export default function CrmScreen() {
   useEffect(() => {
     if (params.new === "1") setEditingCustomer("new");
   }, [params.new]);
+  /** Close the customer form and clear its creation intent from the URL. */
   const closeForm = () => {
     setEditingCustomer(null);
     if (params.new) router.setParams({ new: undefined });

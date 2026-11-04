@@ -18,6 +18,7 @@ export function useCustomerForm(
   const updateCustomerMutation = useUpdateCustomer();
   const queryClient = useQueryClient();
   const toast = useToast();
+  /** Validate and normalize guest contact details before creating or updating the customer. */
   const submit = async () => {
     setError("");
     if (name.trim().length < 2)

@@ -1,3 +1,4 @@
+/** Serialize database integration suites because each scenario resets the dedicated test schema. */
 import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {

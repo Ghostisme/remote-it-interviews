@@ -1,38 +1,43 @@
+/** Exercise real PostgreSQL rules through the Hono request boundary, validating published response contracts. */
 import { fileURLToPath } from "node:url";
 import { sql } from "drizzle-orm";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../src/app";
-import * as C from "../src/contracts";
+import * as Contracts from "../src/contracts";
 import { connectDatabase } from "../src/db/client";
 import { categories, customers, menuItems, settings } from "../src/db/schema";
 import { calculateTotals } from "../src/domain/orders";
 import "../scripts/env";
 
-const url =
+const testDatabaseUrl =
   process.env.TEST_DATABASE_URL ??
   "postgresql://odyssey:odyssey_local@127.0.0.1:55432/odyssey_test";
-if (new URL(url).pathname !== "/odyssey_test")
+// Guard the destructive fixture reset before constructing the database connection.
+if (new URL(testDatabaseUrl).pathname !== "/odyssey_test")
   throw new Error("Tests require the dedicated odyssey_test database.");
-const { db, pool } = connectDatabase(url);
+const { db, pool } = connectDatabase(testDatabaseUrl);
 const app = createApp(db);
 let customerId: string;
-let itemId: string;
-const request = (path: string, method = "GET", data?: unknown) =>
+let menuItemId: string;
+/** Send JSON through the same middleware, validators, and route handlers as the Worker. */
+const requestApi = (path: string, method = "GET", data?: unknown) =>
   app.request(path, {
     method,
     headers: { "Content-Type": "application/json" },
     ...(data === undefined ? {} : { body: JSON.stringify(data) }),
   });
-const input = () => ({
+/** Build an independent valid command so each new order receives a fresh idempotency key. */
+const createOrderInput = () => ({
   customerId,
   fulfillment: "pickup" as const,
   idempotencyKey: crypto.randomUUID(),
-  items: [{ menuItemId: itemId, quantity: 2 }],
+  items: [{ menuItemId: menuItemId, quantity: 2 }],
 });
 beforeAll(async () => {
   await migrate(db, { migrationsFolder: fileURLToPath(new URL("../migrations", import.meta.url)) });
 });
+// Each scenario starts with isolated fixtures in odyssey_test; the review database stays intact.
 beforeEach(async () => {
   await db.execute(
     sql`TRUNCATE order_events, order_items, orders, menu_items, categories, customers, settings RESTART IDENTITY CASCADE`,
@@ -50,7 +55,7 @@ beforeEach(async () => {
     .returning();
   if (!item) throw new Error("Missing test menu item");
   customerId = customer.id;
-  itemId = item.id;
+  menuItemId = item.id;
 });
 afterAll(async () => {
   await pool.end();
@@ -59,37 +64,37 @@ afterAll(async () => {
 describe("PostgreSQL-backed restaurant API", () => {
   it("returns responses matching the published contract", async () => {
     for (const [path, schema] of [
-      ["/api/menu", C.MenuList],
-      ["/api/customers", C.CustomerList],
-      ["/api/orders", C.OrderList],
-      ["/api/settings", C.Settings],
-      ["/api/summary", C.Summary],
+      ["/api/menu", Contracts.MenuList],
+      ["/api/customers", Contracts.CustomerList],
+      ["/api/orders", Contracts.OrderList],
+      ["/api/settings", Contracts.Settings],
+      ["/api/summary", Contracts.Summary],
     ] as const) {
-      const result = await request(path);
+      const result = await requestApi(path);
       expect(result.status, path).toBe(200);
       expect(schema.safeParse(await result.json()).success, path).toBe(true);
     }
   });
   it("calculates prices on the server and snapshots the original menu price", async () => {
-    const result = await request("/api/orders", "POST", input());
+    const result = await requestApi("/api/orders", "POST", createOrderInput());
     expect(result.status).toBe(201);
-    const detail = C.OrderDetail.parse(await result.json());
+    const detail = Contracts.OrderDetail.parse(await result.json());
     expect(detail.order).toMatchObject({
       subtotalCents: 2598,
       taxCents: 214,
       totalCents: 2812,
       status: "pending",
     });
-    await request(`/api/menu/${itemId}`, "PATCH", { priceCents: 2000 });
-    const stored = C.OrderDetail.parse(
-      await (await request(`/api/orders/${detail.order.id}`)).json(),
+    await requestApi(`/api/menu/${menuItemId}`, "PATCH", { priceCents: 2000 });
+    const stored = Contracts.OrderDetail.parse(
+      await (await requestApi(`/api/orders/${detail.order.id}`)).json(),
     );
     expect(stored.items[0]?.unitPriceCents).toBe(1299);
     expect(stored.order).not.toHaveProperty("requestHash");
   });
   it("finds orders by the displayed number, padded number and customer name", async () => {
-    const detail = C.OrderDetail.parse(
-      await (await request("/api/orders", "POST", input())).json(),
+    const detail = Contracts.OrderDetail.parse(
+      await (await requestApi("/api/orders", "POST", createOrderInput())).json(),
     );
     const number = String(detail.order.number);
     const padded = number.padStart(4, "0");
@@ -101,39 +106,39 @@ describe("PostgreSQL-backed restaurant API", () => {
       `oe-${padded}`,
       "Customer",
     ]) {
-      const result = await request(`/api/orders?search=${encodeURIComponent(search)}`);
+      const result = await requestApi(`/api/orders?search=${encodeURIComponent(search)}`);
       expect(result.status).toBe(200);
-      const list = C.OrderList.parse(await result.json());
+      const list = Contracts.OrderList.parse(await result.json());
       expect(
         list.data.map((order) => order.id),
         search,
       ).toEqual([detail.order.id]);
       expect(list.pagination.total, search).toBe(1);
     }
-    const missing = C.OrderList.parse(
-      await (await request("/api/orders?search=%23OE-9999")).json(),
+    const missing = Contracts.OrderList.parse(
+      await (await requestApi("/api/orders?search=%23OE-9999")).json(),
     );
     expect(missing.data).toEqual([]);
   });
   it("rejects invalid and forged input without creating orders", async () => {
     for (const value of [
-      { ...input(), totalCents: 1 },
-      { ...input(), items: [] },
-      { ...input(), items: [{ menuItemId: itemId, quantity: -1 }] },
-      { ...input(), fulfillment: "delivery" },
+      { ...createOrderInput(), totalCents: 1 },
+      { ...createOrderInput(), items: [] },
+      { ...createOrderInput(), items: [{ menuItemId: menuItemId, quantity: -1 }] },
+      { ...createOrderInput(), fulfillment: "delivery" },
       {
-        ...input(),
+        ...createOrderInput(),
         items: [
-          { menuItemId: itemId, quantity: 1 },
-          { menuItemId: itemId, quantity: 2 },
+          { menuItemId: menuItemId, quantity: 1 },
+          { menuItemId: menuItemId, quantity: 2 },
         ],
       },
     ]) {
-      const result = await request("/api/orders", "POST", value);
+      const result = await requestApi("/api/orders", "POST", value);
       expect(result.status).toBe(400);
-      C.ApiError.parse(await result.json());
+      Contracts.ApiError.parse(await result.json());
     }
-    const list = C.OrderList.parse(await (await request("/api/orders")).json());
+    const list = Contracts.OrderList.parse(await (await requestApi("/api/orders")).json());
     expect(list.pagination.total).toBe(0);
   });
   it("returns a typed client error for malformed JSON without creating orders", async () => {
@@ -144,102 +149,110 @@ describe("PostgreSQL-backed restaurant API", () => {
         body,
       });
       expect(result.status).toBe(400);
-      const error = C.ApiError.parse(await result.json());
+      const error = Contracts.ApiError.parse(await result.json());
       expect(error.error.code).toBe("INVALID_JSON");
       expect(error.requestId).toBe(result.headers.get("X-Request-Id"));
     }
-    const list = C.OrderList.parse(await (await request("/api/orders")).json());
+    const list = Contracts.OrderList.parse(await (await requestApi("/api/orders")).json());
     expect(list.pagination.total).toBe(0);
   });
   it("serializes concurrent retries and rejects reusing a key for different content", async () => {
-    const payload = input();
+    const payload = createOrderInput();
+    // Both requests intentionally share one command to exercise database-level serialization.
     const results = await Promise.all([
-      request("/api/orders", "POST", payload),
-      request("/api/orders", "POST", payload),
+      requestApi("/api/orders", "POST", payload),
+      requestApi("/api/orders", "POST", payload),
     ]);
     const details = await Promise.all(
-      results.map(async (r) => {
-        expect(r.status).toBe(201);
-        return C.OrderDetail.parse(await r.json());
+      results.map(async (response) => {
+        expect(response.status).toBe(201);
+        return Contracts.OrderDetail.parse(await response.json());
       }),
     );
     expect(details[0]?.order.id).toBe(details[1]?.order.id);
-    const conflict = await request("/api/orders", "POST", { ...payload, notes: "Different" });
+    const conflict = await requestApi("/api/orders", "POST", { ...payload, notes: "Different" });
     expect(conflict.status).toBe(409);
-    const list = C.OrderList.parse(await (await request("/api/orders")).json());
+    const list = Contracts.OrderList.parse(await (await requestApi("/api/orders")).json());
     expect(list.pagination.total).toBe(1);
   });
   it("enforces availability, paused ordering, service flags and minimum spend", async () => {
-    await request(`/api/menu/${itemId}`, "PATCH", { available: false });
-    expect((await request("/api/orders", "POST", input())).status).toBe(409);
-    await request(`/api/menu/${itemId}`, "PATCH", { available: true });
-    await request("/api/settings", "PATCH", { acceptingOrders: false });
-    expect((await request("/api/orders", "POST", input())).status).toBe(409);
-    await request("/api/settings", "PATCH", { acceptingOrders: true, pickupEnabled: false });
-    expect((await request("/api/orders", "POST", input())).status).toBe(409);
-    await request("/api/settings", "PATCH", { pickupEnabled: true, minimumOrderCents: 5000 });
-    expect((await request("/api/orders", "POST", input())).status).toBe(400);
+    await requestApi(`/api/menu/${menuItemId}`, "PATCH", { available: false });
+    expect((await requestApi("/api/orders", "POST", createOrderInput())).status).toBe(409);
+    await requestApi(`/api/menu/${menuItemId}`, "PATCH", { available: true });
+    await requestApi("/api/settings", "PATCH", { acceptingOrders: false });
+    expect((await requestApi("/api/orders", "POST", createOrderInput())).status).toBe(409);
+    await requestApi("/api/settings", "PATCH", { acceptingOrders: true, pickupEnabled: false });
+    expect((await requestApi("/api/orders", "POST", createOrderInput())).status).toBe(409);
+    await requestApi("/api/settings", "PATCH", { pickupEnabled: true, minimumOrderCents: 5000 });
+    expect((await requestApi("/api/orders", "POST", createOrderInput())).status).toBe(400);
   });
   it("protects state transitions and updates CRM spend and dashboard revenue on completion", async () => {
-    let detail = C.OrderDetail.parse(await (await request("/api/orders", "POST", input())).json());
+    let detail = Contracts.OrderDetail.parse(
+      await (await requestApi("/api/orders", "POST", createOrderInput())).json(),
+    );
     expect(
       (
-        await request(`/api/orders/${detail.order.id}/actions`, "POST", {
+        await requestApi(`/api/orders/${detail.order.id}/actions`, "POST", {
           action: "complete",
           version: 0,
         })
       ).status,
     ).toBe(409);
+    // Competing actions use the same version; exactly one may advance the locked order.
     const concurrent = await Promise.all(
       ["accept", "cancel"].map((action) =>
-        request(`/api/orders/${detail.order.id}/actions`, "POST", { action, version: 0 }),
+        requestApi(`/api/orders/${detail.order.id}/actions`, "POST", { action, version: 0 }),
       ),
     );
-    expect(concurrent.map((r) => r.status).sort()).toEqual([200, 409]);
-    detail = C.OrderDetail.parse(await (await request(`/api/orders/${detail.order.id}`)).json());
+    expect(concurrent.map((response) => response.status).sort()).toEqual([200, 409]);
+    detail = Contracts.OrderDetail.parse(
+      await (await requestApi(`/api/orders/${detail.order.id}`)).json(),
+    );
     if (detail.order.status === "cancelled")
-      detail = C.OrderDetail.parse(await (await request("/api/orders", "POST", input())).json());
+      detail = Contracts.OrderDetail.parse(
+        await (await requestApi("/api/orders", "POST", createOrderInput())).json(),
+      );
     for (const action of detail.order.status === "pending"
       ? ["accept", "prepare", "mark_ready", "complete"]
       : ["prepare", "mark_ready", "complete"]) {
-      const result = await request(`/api/orders/${detail.order.id}/actions`, "POST", {
+      const result = await requestApi(`/api/orders/${detail.order.id}/actions`, "POST", {
         action,
         version: detail.order.version,
       });
       expect(result.status).toBe(200);
-      detail = C.OrderDetail.parse(await result.json());
+      detail = Contracts.OrderDetail.parse(await result.json());
     }
     expect(detail.allowedActions).toEqual([]);
     expect(detail.events.at(-1)?.status).toBe("completed");
-    const customer = C.CustomerDetail.parse(
-      await (await request(`/api/customers/${customerId}`)).json(),
+    const customer = Contracts.CustomerDetail.parse(
+      await (await requestApi(`/api/customers/${customerId}`)).json(),
     );
     expect(customer.customer.spendCents).toBe(2812);
-    const summary = C.Summary.parse(await (await request("/api/summary")).json());
+    const summary = Contracts.Summary.parse(await (await requestApi("/api/summary")).json());
     expect(summary.revenueCents).toBe(2812);
     expect(summary.daily).toHaveLength(7);
   });
   it("archives dishes out of ordering and only deletes them without order history", async () => {
-    expect((await request(`/api/menu/${itemId}`, "DELETE")).status).toBe(409);
-    await request("/api/orders", "POST", input());
-    const archived = C.MenuItem.parse(
-      await (await request(`/api/menu/${itemId}/archive`, "POST")).json(),
+    expect((await requestApi(`/api/menu/${menuItemId}`, "DELETE")).status).toBe(409);
+    await requestApi("/api/orders", "POST", createOrderInput());
+    const archived = Contracts.MenuItem.parse(
+      await (await requestApi(`/api/menu/${menuItemId}/archive`, "POST")).json(),
     );
     expect(archived.archivedAt).not.toBeNull();
-    const rejected = await request("/api/orders", "POST", input());
+    const rejected = await requestApi("/api/orders", "POST", createOrderInput());
     expect(rejected.status).toBe(409);
-    expect(C.ApiError.parse(await rejected.json()).error.code).toBe("ITEM_ARCHIVED");
-    const kept = await request(`/api/menu/${itemId}`, "DELETE");
-    expect(C.ApiError.parse(await kept.json()).error.code).toBe("ITEM_HAS_ORDERS");
-    const restored = C.MenuItem.parse(
-      await (await request(`/api/menu/${itemId}/restore`, "POST")).json(),
+    expect(Contracts.ApiError.parse(await rejected.json()).error.code).toBe("ITEM_ARCHIVED");
+    const kept = await requestApi(`/api/menu/${menuItemId}`, "DELETE");
+    expect(Contracts.ApiError.parse(await kept.json()).error.code).toBe("ITEM_HAS_ORDERS");
+    const restored = Contracts.MenuItem.parse(
+      await (await requestApi(`/api/menu/${menuItemId}/restore`, "POST")).json(),
     );
     expect(restored.archivedAt).toBeNull();
-    expect((await request("/api/orders", "POST", input())).status).toBe(201);
+    expect((await requestApi("/api/orders", "POST", createOrderInput())).status).toBe(201);
 
-    const fresh = C.MenuItem.parse(
+    const fresh = Contracts.MenuItem.parse(
       await (
-        await request("/api/menu", "POST", {
+        await requestApi("/api/menu", "POST", {
           name: "Unused special",
           categoryId: archived.categoryId,
           priceCents: 900,
@@ -247,34 +260,38 @@ describe("PostgreSQL-backed restaurant API", () => {
         })
       ).json(),
     );
-    await request(`/api/menu/${fresh.id}/archive`, "POST");
-    expect((await request(`/api/menu/${fresh.id}`, "DELETE")).status).toBe(204);
-    const menu = C.MenuList.parse(await (await request("/api/menu")).json());
-    expect(menu.items.map((item) => item.id)).toEqual([itemId]);
+    await requestApi(`/api/menu/${fresh.id}/archive`, "POST");
+    expect((await requestApi(`/api/menu/${fresh.id}`, "DELETE")).status).toBe(204);
+    const menu = Contracts.MenuList.parse(await (await requestApi("/api/menu")).json());
+    expect(menu.items.map((item) => item.id)).toEqual([menuItemId]);
   });
   it("renames categories and deletes only empty ones", async () => {
-    const menu = C.MenuList.parse(await (await request("/api/menu")).json());
+    const menu = Contracts.MenuList.parse(await (await requestApi("/api/menu")).json());
     const mainsId = menu.categories[0]?.id;
-    const renamed = await request(`/api/categories/${mainsId}`, "PATCH", { name: "Large plates" });
-    expect(C.Category.parse(await renamed.json()).name).toBe("Large plates");
-    expect((await request(`/api/categories/${mainsId}`, "PATCH", { name: "x" })).status).toBe(400);
-    const blocked = await request(`/api/categories/${mainsId}`, "DELETE");
-    expect(C.ApiError.parse(await blocked.json()).error.code).toBe("CATEGORY_NOT_EMPTY");
-    const empty = C.Category.parse(
-      await (await request("/api/categories", "POST", { name: "Seasonal" })).json(),
+    const renamed = await requestApi(`/api/categories/${mainsId}`, "PATCH", {
+      name: "Large plates",
+    });
+    expect(Contracts.Category.parse(await renamed.json()).name).toBe("Large plates");
+    expect((await requestApi(`/api/categories/${mainsId}`, "PATCH", { name: "x" })).status).toBe(
+      400,
     );
-    expect((await request(`/api/categories/${empty.id}`, "DELETE")).status).toBe(204);
-    expect((await request(`/api/categories/${empty.id}`, "DELETE")).status).toBe(404);
+    const blocked = await requestApi(`/api/categories/${mainsId}`, "DELETE");
+    expect(Contracts.ApiError.parse(await blocked.json()).error.code).toBe("CATEGORY_NOT_EMPTY");
+    const empty = Contracts.Category.parse(
+      await (await requestApi("/api/categories", "POST", { name: "Seasonal" })).json(),
+    );
+    expect((await requestApi(`/api/categories/${empty.id}`, "DELETE")).status).toBe(204);
+    expect((await requestApi(`/api/categories/${empty.id}`, "DELETE")).status).toBe(404);
   });
   it("validates pagination, unique emails and missing records", async () => {
-    expect((await request("/api/orders?pageSize=1000")).status).toBe(400);
+    expect((await requestApi("/api/orders?pageSize=1000")).status).toBe(400);
     expect(
-      (await request("/api/customers", "POST", { name: "Duplicate", email: "test@example.com" }))
+      (await requestApi("/api/customers", "POST", { name: "Duplicate", email: "test@example.com" }))
         .status,
     ).toBe(409);
-    expect((await request(`/api/orders/${crypto.randomUUID()}`)).status).toBe(404);
-    const result = await request("/api/customers?search=does-not-exist");
-    const list = C.CustomerList.parse(await result.json());
+    expect((await requestApi(`/api/orders/${crypto.randomUUID()}`)).status).toBe(404);
+    const result = await requestApi("/api/customers?search=does-not-exist");
+    const list = Contracts.CustomerList.parse(await result.json());
     expect(list.data).toEqual([]);
   });
 });

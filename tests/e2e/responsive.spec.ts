@@ -1,3 +1,4 @@
+/** Check loaded layouts and nested dialogs across phone, tablet, and desktop viewport sizes. */
 import { expect, type Page, test } from "@playwright/test";
 import type { MenuList } from "../../packages/api-client/src/generated/model";
 
@@ -10,15 +11,16 @@ const routes = [
   ["/ui-library", "Thoughtful by design.", ""],
 ] as const;
 
-async function openLoaded(page: Page, path: string, title: string, endpoint: string) {
-  const ready = endpoint
-    ? page.waitForResponse((r) => {
-        const url = new URL(r.url());
-        return url.pathname === `/api${endpoint}` && r.ok();
+/** Wait for route data, bundled fonts, and decoded images before measuring layout geometry. */
+async function openLoadedPage(page: Page, path: string, title: string, endpoint: string) {
+  const routeResponse = endpoint
+    ? page.waitForResponse((response) => {
+        const responseUrl = new URL(response.url());
+        return responseUrl.pathname === `/api${endpoint}` && response.ok();
       })
     : Promise.resolve();
   await page.goto(path);
-  await ready;
+  await routeResponse;
   await expect(page.getByText(title, { exact: true })).toBeVisible();
   if (endpoint) await expect(page.getByLabel("Loading", { exact: true }).first()).toBeHidden();
   await page.evaluate(async () => {
@@ -28,14 +30,15 @@ async function openLoaded(page: Page, path: string, title: string, endpoint: str
   });
 }
 
+/** Detect off-screen controls while allowing deliberate table and navigation scroll containers. */
 async function expectNoClipping(page: Page) {
   // Checking document.scrollWidth alone misses controls clipped inside overflow:hidden cards.
   const overflow = await page.evaluate(() => {
     const viewportWidth = document.documentElement.clientWidth;
     return Array.from(document.querySelectorAll<HTMLElement>("div, button, input, textarea"))
       .filter((element) => {
-        const rect = element.getBoundingClientRect();
-        if (!rect.width || !rect.height) return false;
+        const bounds = element.getBoundingClientRect();
+        if (!bounds.width || !bounds.height) return false;
         // Navigation strips and data tables deliberately scroll horizontally.
         for (let parent = element.parentElement; parent; parent = parent.parentElement) {
           const style = getComputedStyle(parent);
@@ -45,7 +48,7 @@ async function expectNoClipping(page: Page) {
           )
             return false;
         }
-        return rect.right > viewportWidth + 1 || rect.left < -1;
+        return bounds.right > viewportWidth + 1 || bounds.left < -1;
       })
       .slice(0, 10)
       .map((element) => ({
@@ -74,7 +77,7 @@ test("loaded pages fit phone, tablet and desktop widths without clipped controls
   for (const width of [320, 375, 390, 768, 1024, 1366, 1600]) {
     await page.setViewportSize({ width, height: width < 800 ? 844 : 900 });
     for (const [path, title, endpoint] of routes) {
-      await openLoaded(page, path, title, endpoint);
+      await openLoadedPage(page, path, title, endpoint);
       await expectNoClipping(page);
       if (path === "/orders") {
         await page.getByRole("tab", { name: "Preparing", exact: true }).click();
@@ -115,7 +118,7 @@ test("long menu content and nested dialogs remain usable on a small phone", asyn
     await route.fulfill({ response, json: menu });
   });
   await page.setViewportSize({ width: 320, height: 568 });
-  await openLoaded(page, "/menu", "A menu worth coming back for.", "/menu");
+  await openLoadedPage(page, "/menu", "A menu worth coming back for.", "/menu");
   await expectNoClipping(page);
   await page.getByRole("button", { name: `Edit ${name}`, exact: true }).click();
   const editor = page.getByRole("dialog", { name: "A little menu refinement", exact: true });

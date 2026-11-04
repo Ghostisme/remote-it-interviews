@@ -78,6 +78,8 @@ Persisted models and enums originate in [`schema.ts`](services/backend/src/db/sc
 
 Screen components compose shared UI and generated hooks. Form/cart logic lives in feature hooks; transactions, pricing, state transitions and analytics live on the backend. React Query manages caching, invalidation and background refresh. Frontend API models come from the generated client or its shared re-export, without a parallel set of handwritten DTOs.
 
+Handwritten source uses English JSDoc for function and component responsibilities, with inline comments for business invariants, money/rate units, transaction locks, retry behavior, cache invalidation, and mobile accessibility. Variables name the domain entity and intent (for example, `selectedOrderId`, `createOrderMutation`, `subtotalCents`, and `taxRateBps`). Generated hooks, models, the OpenAPI export, and migration snapshots remain machine-managed; document their source definitions and regenerate them together.
+
 The design system centralizes a warm green/orange palette, DM Sans/DM Serif Display, spacing, radius, borders, elevation and responsive layout rules. React Native primitives cover desktop and narrow web layouts. Web interactions include hover/pressed/disabled states, visible keyboard focus, accessible control labels, dialog focus restoration and nested-dialog Escape handling. Images and fonts ship locally; the running app does not need a photo CDN.
 
 ### Ordering rules

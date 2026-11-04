@@ -1,3 +1,4 @@
+/** Verify category editing and dish lifecycle behavior while preserving historical order snapshots. */
 import { existsSync } from "node:fs";
 import { request as apiRequest, expect, test } from "@playwright/test";
 import pg from "pg";
@@ -9,10 +10,11 @@ import type {
   Settings,
 } from "../../packages/api-client/src/generated/model";
 
-const api = "http://localhost:8787/api";
+const apiBaseUrl = "http://localhost:8787/api";
 if (existsSync(".env")) process.loadEnvFile(".env");
 const databaseUrl =
   process.env.DATABASE_URL ?? "postgresql://odyssey:odyssey_local@127.0.0.1:55432/odyssey";
+// Cleanup is confined to fixture IDs in the dedicated review database.
 if (new URL(databaseUrl).pathname !== "/odyssey")
   throw new Error("Browser tests require the dedicated odyssey demo database.");
 
@@ -21,21 +23,21 @@ test("rename categories and archive, restore and delete dishes without losing or
 }) => {
   const request = await apiRequest.newContext();
   const suffix = Date.now();
-  const original: Settings = await (await request.get(`${api}/settings`)).json();
+  const original: Settings = await (await request.get(`${apiBaseUrl}/settings`)).json();
   let category: Category | undefined;
   let customer: Customer | undefined;
   let ordered: OrderDetail | undefined;
   const items: MenuItem[] = [];
   const errors: string[] = [];
-  page.on("pageerror", (e) => errors.push(e.message));
+  page.on("pageerror", (error) => errors.push(error.message));
   try {
-    const categoryResponse = await request.post(`${api}/categories`, {
+    const categoryResponse = await request.post(`${apiBaseUrl}/categories`, {
       data: { name: `Seasonal archive ${suffix}` },
     });
     expect(categoryResponse.ok()).toBe(true);
     category = await categoryResponse.json();
     for (const name of [`Archive me ${suffix}`, `History dish ${suffix}`]) {
-      const response = await request.post(`${api}/menu`, {
+      const response = await request.post(`${apiBaseUrl}/menu`, {
         data: {
           name,
           description: "Seasonal vegetables and a little extra care.",
@@ -49,19 +51,19 @@ test("rename categories and archive, restore and delete dishes without losing or
       expect(response.ok()).toBe(true);
       items.push(await response.json());
     }
-    const response = await request.post(`${api}/customers`, {
+    const response = await request.post(`${apiBaseUrl}/customers`, {
       data: { name: `Archive guest ${suffix}` },
     });
     expect(response.ok()).toBe(true);
     customer = await response.json();
     expect(
       (
-        await request.patch(`${api}/settings`, {
+        await request.patch(`${apiBaseUrl}/settings`, {
           data: { acceptingOrders: true, pickupEnabled: true, minimumOrderCents: 0 },
         })
       ).ok(),
     ).toBe(true);
-    const order = await request.post(`${api}/orders`, {
+    const order = await request.post(`${apiBaseUrl}/orders`, {
       data: {
         customerId: customer?.id,
         fulfillment: "pickup",
@@ -150,7 +152,7 @@ test("rename categories and archive, restore and delete dishes without losing or
     await page.getByRole("button", { name: `Delete ${items[0]?.name}`, exact: true }).click();
     await page.getByRole("button", { name: "Delete permanently", exact: true }).click();
     await expect(page.getByRole("dialog", { name: "Delete this dish?", exact: true })).toBeHidden();
-    expect((await request.delete(`${api}/menu/${items[0]?.id}`)).status()).toBe(404);
+    expect((await request.delete(`${apiBaseUrl}/menu/${items[0]?.id}`)).status()).toBe(404);
 
     await page
       .getByRole("textbox", { name: "Search your menu...", exact: true })
@@ -164,18 +166,22 @@ test("rename categories and archive, restore and delete dishes without losing or
       ),
     ).toBeVisible();
     const detail: OrderDetail = await (
-      await request.get(`${api}/orders/${ordered?.order.id}`)
+      await request.get(`${apiBaseUrl}/orders/${ordered?.order.id}`)
     ).json();
     expect(detail.items[0]?.name).toBe(items[1]?.name);
     expect(detail.order.totalCents).toBe(ordered?.order.totalCents);
     await page.getByRole("button", { name: "Cancel", exact: true }).click();
 
     // Move the history-bearing dish; an empty category can now be deleted.
-    const menu = await (await request.get(`${api}/menu`)).json();
-    const other = (menu.categories as Category[]).find((c) => c.id !== category?.id);
+    const menu = await (await request.get(`${apiBaseUrl}/menu`)).json();
+    const destinationCategory = (menu.categories as Category[]).find(
+      (candidateCategory) => candidateCategory.id !== category?.id,
+    );
     expect(
       (
-        await request.patch(`${api}/menu/${items[1]?.id}`, { data: { categoryId: other?.id } })
+        await request.patch(`${apiBaseUrl}/menu/${items[1]?.id}`, {
+          data: { categoryId: destinationCategory?.id },
+        })
       ).ok(),
     ).toBe(true);
     await page.reload();
@@ -192,18 +198,21 @@ test("rename categories and archive, restore and delete dishes without losing or
     ).toHaveCount(0);
     expect(errors).toEqual([]);
   } finally {
+    // Restore preferences even after assertion failures; remove fixtures in foreign-key order.
     const { id: _id, updatedAt: _updatedAt, ...restore } = original;
-    const restored = await request.patch(`${api}/settings`, { data: restore });
-    const client = new pg.Client({ connectionString: databaseUrl });
-    await client.connect();
+    const restored = await request.patch(`${apiBaseUrl}/settings`, { data: restore });
+    const cleanupClient = new pg.Client({ connectionString: databaseUrl });
+    await cleanupClient.connect();
     try {
-      if (ordered) await client.query("DELETE FROM orders WHERE id = $1", [ordered.order.id]);
+      if (ordered)
+        await cleanupClient.query("DELETE FROM orders WHERE id = $1", [ordered.order.id]);
       for (const item of items)
-        await client.query("DELETE FROM menu_items WHERE id = $1", [item.id]);
-      if (customer) await client.query("DELETE FROM customers WHERE id = $1", [customer.id]);
-      if (category) await client.query("DELETE FROM categories WHERE id = $1", [category.id]);
+        await cleanupClient.query("DELETE FROM menu_items WHERE id = $1", [item.id]);
+      if (customer) await cleanupClient.query("DELETE FROM customers WHERE id = $1", [customer.id]);
+      if (category)
+        await cleanupClient.query("DELETE FROM categories WHERE id = $1", [category.id]);
     } finally {
-      await client.end();
+      await cleanupClient.end();
       await request.dispose();
     }
     expect(restored.ok()).toBe(true);

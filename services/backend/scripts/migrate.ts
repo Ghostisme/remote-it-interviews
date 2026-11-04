@@ -1,3 +1,4 @@
+/** Apply committed migrations to the explicitly scoped demo or test database and always close its pool. */
 import { fileURLToPath } from "node:url";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { connectDatabase } from "../src/db/client";
