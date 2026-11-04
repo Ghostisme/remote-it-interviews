@@ -20,6 +20,7 @@ import { Mail, Pencil, Phone } from "lucide-react-native";
 import { useCustomerForm } from "../features/customers/use-customer-form";
 import { dateLabel, FormActions, OrdersTable, QueryError, SectionHeading } from "./common";
 
+/** Reuse the customer form for profile creation and editing, keeping save errors in context. */
 export function CustomerFormDialog({
   customer,
   onClose,
@@ -27,7 +28,7 @@ export function CustomerFormDialog({
 }: {
   customer?: Customer;
   onClose: () => void;
-  onSaved: (id: string) => void;
+  onSaved: (customerId: string) => void;
 }) {
   const form = useCustomerForm(customer, onSaved);
   return (
@@ -92,8 +93,9 @@ export function CustomerFormDialog({
   );
 }
 
+/** Show server-calculated guest metrics and link their recent orders back to order management. */
 export function CustomerDetailDialog({
-  id,
+  id: customerId,
   onClose,
   onEdit,
   onOrder,
@@ -101,10 +103,10 @@ export function CustomerDetailDialog({
   id: string;
   onClose: () => void;
   onEdit: (customer: Customer) => void;
-  onOrder: (id: string) => void;
+  onOrder: (orderId: string) => void;
 }) {
-  const query = useGetCustomer(id);
-  const detail = query.data;
+  const customerQuery = useGetCustomer(customerId);
+  const detail = customerQuery.data;
   return (
     <Dialog
       visible
@@ -128,10 +130,10 @@ export function CustomerDetailDialog({
         </Row>
       }
     >
-      {query.isPending ? (
+      {customerQuery.isPending ? (
         <LoadingState />
-      ) : query.isError ? (
-        <QueryError error={query.error} retry={query.refetch} />
+      ) : customerQuery.isError ? (
+        <QueryError error={customerQuery.error} retry={customerQuery.refetch} />
       ) : detail ? (
         <Stack gap={24}>
           <Row wrap gap={16}>

@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-export function useDebounced<T>(value: T, delay = 250) {
-  const [debounced, setDebounced] = useState(value);
+/** Delay search updates and cancel superseded timers on input changes or unmount. */
+export function useDebounced<T>(value: T, delayMs = 250) {
+  const [debouncedValue, setDebouncedValue] = useState(value);
   useEffect(() => {
-    const timer = setTimeout(() => setDebounced(value), delay);
+    const timer = setTimeout(() => setDebouncedValue(value), delayMs);
     return () => clearTimeout(timer);
-  }, [value, delay]);
-  return debounced;
+  }, [value, delayMs]);
+  return debouncedValue;
 }

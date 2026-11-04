@@ -24,21 +24,26 @@ import { dateLabel, PageHeading, QueryError } from "../components/common";
 import { CustomerDetailDialog, CustomerFormDialog } from "../components/customer-dialogs";
 import { useDebounced } from "../features/use-debounced";
 
+/** Search and paginate guest profiles, then connect profile editing and order-history navigation. */
 export default function CrmScreen() {
   const params = useLocalSearchParams<{ new?: string }>();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const [selected, setSelected] = useState<string | null>(null);
-  const [editing, setEditing] = useState<Customer | "new" | null>(
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
+  const [editingCustomer, setEditingCustomer] = useState<Customer | "new" | null>(
     params.new === "1" ? "new" : null,
   );
-  const debounced = useDebounced(search);
-  const query = useGetCustomers({ page, pageSize: 10, search: debounced || undefined });
+  const debouncedSearch = useDebounced(search);
+  const customersQuery = useGetCustomers({
+    page,
+    pageSize: 10,
+    search: debouncedSearch || undefined,
+  });
   useEffect(() => {
-    if (params.new === "1") setEditing("new");
+    if (params.new === "1") setEditingCustomer("new");
   }, [params.new]);
   const closeForm = () => {
-    setEditing(null);
+    setEditingCustomer(null);
     if (params.new) router.setParams({ new: undefined });
   };
   return (
@@ -48,7 +53,10 @@ export default function CrmScreen() {
         title="Know the people at your table."
         subtitle="A little recognition goes a long way. Make every visit feel personal."
         action={
-          <Button icon={<UserPlus size={16} color="white" />} onPress={() => setEditing("new")}>
+          <Button
+            icon={<UserPlus size={16} color="white" />}
+            onPress={() => setEditingCustomer("new")}
+          >
             Add customer
           </Button>
         }
@@ -67,7 +75,8 @@ export default function CrmScreen() {
             </Txt>
           </Stack>
           <Badge tone="brand">
-            {query.data?.pagination.total ?? "—"} {search ? "matching guests" : "guests & counting"}
+            {customersQuery.data?.pagination.total ?? "—"}{" "}
+            {search ? "matching guests" : "guests & counting"}
           </Badge>
         </Row>
       </Card>
@@ -91,15 +100,15 @@ export default function CrmScreen() {
             style={{ minWidth: 240 }}
           />
         </Row>
-        {query.isPending ? (
+        {customersQuery.isPending ? (
           <View style={{ padding: 22 }}>
             <LoadingState />
           </View>
-        ) : query.isError ? (
+        ) : customersQuery.isError ? (
           <View style={{ padding: 22 }}>
-            <QueryError error={query.error} retry={query.refetch} />
+            <QueryError error={customersQuery.error} retry={customersQuery.refetch} />
           </View>
-        ) : !query.data.data.length ? (
+        ) : !customersQuery.data.data.length ? (
           <EmptyState
             title={search ? "No guests found" : "Your first guest is a hello away"}
             message={
@@ -110,7 +119,7 @@ export default function CrmScreen() {
             action={
               <Button
                 variant="secondary"
-                onPress={() => (search ? setSearch("") : setEditing("new"))}
+                onPress={() => (search ? setSearch("") : setEditingCustomer("new"))}
               >
                 {search ? "Clear search" : "Add customer"}
               </Button>
@@ -119,23 +128,23 @@ export default function CrmScreen() {
         ) : (
           <>
             <DataTable
-              rows={query.data.data}
-              keyOf={(c) => c.id}
-              onRowPress={(c) => setSelected(c.id)}
+              rows={customersQuery.data.data}
+              keyOf={(customer) => customer.id}
+              onRowPress={(customer) => setSelectedCustomerId(customer.id)}
               minWidth={840}
               columns={[
                 {
                   title: "Customer",
                   flex: 1.8,
-                  render: (c) => (
+                  render: (customer) => (
                     <Row gap={12}>
-                      <Avatar name={c.name} size={36} />
+                      <Avatar name={customer.name} size={36} />
                       <Stack gap={2}>
                         <Txt size={12} weight="semibold">
-                          {c.name}
+                          {customer.name}
                         </Txt>
                         <Txt size={10} color={t.color.muted}>
-                          {c.email ?? "No email provided"}
+                          {customer.email ?? "No email provided"}
                         </Txt>
                       </Stack>
                     </Row>
@@ -144,33 +153,35 @@ export default function CrmScreen() {
                 {
                   title: "Phone",
                   flex: 1.25,
-                  render: (c) => (
+                  render: (customer) => (
                     <Txt size={12} color={t.color.muted}>
-                      {c.phone ?? "—"}
+                      {customer.phone ?? "—"}
                     </Txt>
                   ),
                 },
                 {
                   title: "Orders",
                   flex: 0.7,
-                  render: (c) => (
-                    <Badge tone={c.orderCount >= 5 ? "brand" : "neutral"}>{c.orderCount}</Badge>
+                  render: (customer) => (
+                    <Badge tone={customer.orderCount >= 5 ? "brand" : "neutral"}>
+                      {customer.orderCount}
+                    </Badge>
                   ),
                 },
                 {
                   title: "Total spend",
-                  render: (c) => (
+                  render: (customer) => (
                     <Txt size={12} weight="semibold">
-                      {formatMoney(c.spendCents)}
+                      {formatMoney(customer.spendCents)}
                     </Txt>
                   ),
                 },
                 {
                   title: "Last visit",
-                  render: (c) => (
+                  render: (customer) => (
                     <Row style={{ justifyContent: "space-between" }}>
                       <Txt size={12} color={t.color.muted}>
-                        {c.lastOrderAt ? dateLabel(c.lastOrderAt) : "Not yet"}
+                        {customer.lastOrderAt ? dateLabel(customer.lastOrderAt) : "Not yet"}
                       </Txt>
                       <ArrowUpRight size={14} color={t.color.subtle} />
                     </Row>
@@ -178,31 +189,31 @@ export default function CrmScreen() {
                 },
               ]}
             />
-            <Pagination {...query.data.pagination} onChange={setPage} />
+            <Pagination {...customersQuery.data.pagination} onChange={setPage} />
           </>
         )}
       </Card>
       <Txt size={11} color={t.color.muted}>
         Customer spend reflects completed orders. Cancelled orders are excluded from order counts.
       </Txt>
-      {selected && !editing ? (
+      {selectedCustomerId && !editingCustomer ? (
         <CustomerDetailDialog
-          id={selected}
-          onClose={() => setSelected(null)}
-          onEdit={setEditing}
+          id={selectedCustomerId}
+          onClose={() => setSelectedCustomerId(null)}
+          onEdit={setEditingCustomer}
           onOrder={(id) => {
-            setSelected(null);
+            setSelectedCustomerId(null);
             router.push(`/orders?id=${id}`);
           }}
         />
       ) : null}
-      {editing ? (
+      {editingCustomer ? (
         <CustomerFormDialog
-          customer={editing === "new" ? undefined : editing}
+          customer={editingCustomer === "new" ? undefined : editingCustomer}
           onClose={closeForm}
           onSaved={(id) => {
             closeForm();
-            setSelected(id);
+            setSelectedCustomerId(id);
           }}
         />
       ) : null}

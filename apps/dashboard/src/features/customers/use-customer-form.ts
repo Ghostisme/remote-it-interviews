@@ -4,15 +4,19 @@ import { useToast } from "@odyssey/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
-export function useCustomerForm(customer: Customer | undefined, onSaved: (id: string) => void) {
+/** Validate a guest profile and refresh views that display customer identities. */
+export function useCustomerForm(
+  customer: Customer | undefined,
+  onSaved: (customerId: string) => void,
+) {
   const [name, setName] = useState(customer?.name ?? "");
   const [email, setEmail] = useState(customer?.email ?? "");
   const [phone, setPhone] = useState(customer?.phone ?? "");
   const [notes, setNotes] = useState(customer?.notes ?? "");
   const [error, setError] = useState("");
-  const create = useCreateCustomer();
-  const update = useUpdateCustomer();
-  const client = useQueryClient();
+  const createCustomerMutation = useCreateCustomer();
+  const updateCustomerMutation = useUpdateCustomer();
+  const queryClient = useQueryClient();
   const toast = useToast();
   const submit = async () => {
     setError("");
@@ -22,7 +26,8 @@ export function useCustomerForm(customer: Customer | undefined, onSaved: (id: st
       return setError("Enter a valid email, or leave it blank.");
     if (phone.trim() && phone.trim().length < 5)
       return setError("Enter a phone number with at least 5 characters, or leave it blank.");
-    const data: CreateCustomer = {
+    // Persist absent optional contacts as null rather than blank addresses.
+    const customerPayload: CreateCustomer = {
       name: name.trim(),
       email: email.trim() || null,
       phone: phone.trim() || null,
@@ -30,13 +35,13 @@ export function useCustomerForm(customer: Customer | undefined, onSaved: (id: st
     };
     try {
       const result = customer
-        ? await update.mutateAsync({ id: customer.id, data })
-        : await create.mutateAsync({ data });
-      await client.invalidateQueries();
+        ? await updateCustomerMutation.mutateAsync({ id: customer.id, data: customerPayload })
+        : await createCustomerMutation.mutateAsync({ data: customerPayload });
+      await queryClient.invalidateQueries();
       toast(customer ? "Guest details updated." : "A warm welcome to your newest guest.");
       onSaved(result.id);
-    } catch (e) {
-      setError(errorMessage(e));
+    } catch (error) {
+      setError(errorMessage(error));
     }
   };
   return {
@@ -50,6 +55,6 @@ export function useCustomerForm(customer: Customer | undefined, onSaved: (id: st
     setNotes,
     error,
     submit,
-    saving: create.isPending || update.isPending,
+    saving: createCustomerMutation.isPending || updateCustomerMutation.isPending,
   };
 }

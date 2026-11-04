@@ -9,8 +9,9 @@ import type { Category, CreateMenuItem, MenuItem } from "@odyssey/types";
 import { useToast } from "@odyssey/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { parseMoney } from "../orders/cart";
+import { parseDecimalToHundredths } from "../orders/cart";
 
+/** Create or edit a dish while keeping display prices separate from integer-cent API values. */
 export function useMenuForm(
   categories: Category[],
   item: MenuItem | undefined,
@@ -26,18 +27,18 @@ export function useMenuForm(
   const [available, setAvailable] = useState(item?.available ?? true);
   const [featured, setFeatured] = useState(item?.featured ?? false);
   const [error, setError] = useState("");
-  const create = useCreateMenuItem();
-  const update = useUpdateMenuItem();
-  const client = useQueryClient();
+  const createMenuItemMutation = useCreateMenuItem();
+  const updateMenuItemMutation = useUpdateMenuItem();
+  const queryClient = useQueryClient();
   const toast = useToast();
   const save = async () => {
     setError("");
-    const priceCents = parseMoney(price);
+    const priceCents = parseDecimalToHundredths(price);
     if (name.trim().length < 2) return setError("Give your dish a name of at least 2 characters.");
     if (priceCents === null || priceCents <= 0)
       return setError("Enter a price between $0.01 and $10,000.00, with up to 2 decimal places.");
     if (!categoryId) return setError("Create and choose a category first.");
-    const data: CreateMenuItem = {
+    const menuItemPayload: CreateMenuItem = {
       name: name.trim(),
       description: description.trim(),
       priceCents,
@@ -47,13 +48,13 @@ export function useMenuForm(
       featured,
     };
     try {
-      if (item) await update.mutateAsync({ id: item.id, data });
-      else await create.mutateAsync({ data });
-      await client.invalidateQueries();
+      if (item) await updateMenuItemMutation.mutateAsync({ id: item.id, data: menuItemPayload });
+      else await createMenuItemMutation.mutateAsync({ data: menuItemPayload });
+      await queryClient.invalidateQueries();
       toast(item ? "Menu item updated." : "A delicious new addition to the menu.");
       onSaved();
-    } catch (e) {
-      setError(errorMessage(e));
+    } catch (error) {
+      setError(errorMessage(error));
     }
   };
   return {
@@ -73,29 +74,39 @@ export function useMenuForm(
     setFeatured,
     error,
     save,
-    saving: create.isPending || update.isPending,
+    saving: createMenuItemMutation.isPending || updateMenuItemMutation.isPending,
   };
 }
 
+/** Expose quick availability changes and category creation outside the dish editor. */
 export function useMenuActions() {
-  const update = useUpdateMenuItem();
-  const category = useCreateCategory();
+  const updateMenuItemMutation = useUpdateMenuItem();
+  const createCategoryMutation = useCreateCategory();
   const toast = useToast();
-  const client = useQueryClient();
+  const queryClient = useQueryClient();
+  // Sold-out status is temporary; archiving uses a separate confirmation flow.
   const toggle = async (item: MenuItem) => {
     try {
-      await update.mutateAsync({ id: item.id, data: { available: !item.available } });
-      await client.invalidateQueries();
+      await updateMenuItemMutation.mutateAsync({
+        id: item.id,
+        data: { available: !item.available },
+      });
+      await queryClient.invalidateQueries();
       toast(item.available ? `${item.name} marked sold out.` : `${item.name} is back on the menu.`);
-    } catch (e) {
-      toast(errorMessage(e), "danger");
+    } catch (error) {
+      toast(errorMessage(error), "danger");
     }
   };
   const addCategory = async (name: string) => {
-    const result = await category.mutateAsync({ data: { name: name.trim() } });
-    await client.invalidateQueries();
+    const result = await createCategoryMutation.mutateAsync({ data: { name: name.trim() } });
+    await queryClient.invalidateQueries();
     toast("Category created.");
     return result;
   };
-  return { toggle, toggling: update.isPending, addCategory, adding: category.isPending };
+  return {
+    toggle,
+    toggling: updateMenuItemMutation.isPending,
+    addCategory,
+    adding: createCategoryMutation.isPending,
+  };
 }

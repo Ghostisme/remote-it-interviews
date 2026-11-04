@@ -19,6 +19,7 @@ import { View } from "react-native";
 import { PageHeading, QueryError, SectionHeading, useCompact } from "../components/common";
 import { useSettingsForm } from "../features/settings/use-settings-form";
 
+/** Pair an ordering preference with its label, explanation, and accessible switch. */
 function Preference({
   title,
   description,
@@ -53,10 +54,11 @@ function Preference({
     </Row>
   );
 }
+/** Present editable preferences and explicit save/discard actions across narrow and wide screens. */
 function SettingsForm({ settings }: { settings: Settings }) {
   const form = useSettingsForm(settings);
   const compact = useCompact();
-  const d = form.draft;
+  const draft = form.draft;
   return (
     <Stack gap={20}>
       <PageHeading
@@ -65,7 +67,7 @@ function SettingsForm({ settings }: { settings: Settings }) {
         subtitle="Set the little things that keep every service running smoothly."
         action={
           <Button
-            disabled={!form.dirty}
+            disabled={!form.isDirty}
             loading={form.saving}
             onPress={form.save}
             icon={<Save size={15} color="white" />}
@@ -98,8 +100,8 @@ function SettingsForm({ settings }: { settings: Settings }) {
               </Row>
               <Field
                 label="Restaurant name"
-                value={d.restaurantName}
-                onChangeText={(value) => form.field("restaurantName", value)}
+                value={draft.restaurantName}
+                onChangeText={(value) => form.setField("restaurantName", value)}
                 maxLength={80}
               />
               <Banner
@@ -116,22 +118,22 @@ function SettingsForm({ settings }: { settings: Settings }) {
             <Preference
               title="Accepting orders"
               description="Pause new orders whenever the kitchen needs a breather."
-              value={d.acceptingOrders}
-              onChange={(value) => form.field("acceptingOrders", value)}
+              value={draft.acceptingOrders}
+              onChange={(value) => form.setField("acceptingOrders", value)}
               disabled={form.saving}
             />
             <Preference
               title="Auto-accept orders"
               description="New orders go straight to accepted, ready for preparation."
-              value={d.autoAccept}
-              onChange={(value) => form.field("autoAccept", value)}
+              value={draft.autoAccept}
+              onChange={(value) => form.setField("autoAccept", value)}
               disabled={form.saving}
             />
             <View style={{ marginTop: 20 }}>
               <Field
                 label="Preparation time (minutes)"
-                value={d.prepTime}
-                onChangeText={(value) => form.field("prepTime", value)}
+                value={draft.prepTime}
+                onChangeText={(value) => form.setField("prepTime", value)}
                 keyboardType="number-pad"
                 hint="Between 5 and 120 minutes. Shown when creating an order."
               />
@@ -146,27 +148,27 @@ function SettingsForm({ settings }: { settings: Settings }) {
               title="Delivery"
               description="Bring good food to your guests' doorsteps."
               icon={<Bike size={19} color={t.color.brand} />}
-              value={d.deliveryEnabled}
-              onChange={(value) => form.field("deliveryEnabled", value)}
+              value={draft.deliveryEnabled}
+              onChange={(value) => form.setField("deliveryEnabled", value)}
               disabled={form.saving}
             />
             <Preference
               title="Pickup"
               description="Freshly prepared, ready when your guests are."
               icon={<ShoppingBag size={19} color={t.color.brand} />}
-              value={d.pickupEnabled}
-              onChange={(value) => form.field("pickupEnabled", value)}
+              value={draft.pickupEnabled}
+              onChange={(value) => form.setField("pickupEnabled", value)}
               disabled={form.saving}
             />
             <Preference
               title="Dine in"
               description="Welcome guests to a seat at your table."
               icon={<Coffee size={19} color={t.color.brand} />}
-              value={d.dineInEnabled}
-              onChange={(value) => form.field("dineInEnabled", value)}
+              value={draft.dineInEnabled}
+              onChange={(value) => form.setField("dineInEnabled", value)}
               disabled={form.saving}
             />
-            {!d.deliveryEnabled && !d.pickupEnabled && !d.dineInEnabled ? (
+            {!draft.deliveryEnabled && !draft.pickupEnabled && !draft.dineInEnabled ? (
               <View style={{ marginTop: 16 }}>
                 <Banner
                   tone="warning"
@@ -182,22 +184,22 @@ function SettingsForm({ settings }: { settings: Settings }) {
               <SectionHeading title="The numbers" subtitle="Clear pricing, no surprises." />
               <Field
                 label="Delivery fee (USD)"
-                value={d.deliveryFee}
-                onChangeText={(value) => form.field("deliveryFee", value)}
+                value={draft.deliveryFee}
+                onChangeText={(value) => form.setField("deliveryFee", value)}
                 keyboardType="decimal-pad"
                 hint="Added to delivery orders only."
               />
               <Field
                 label="Minimum order subtotal (USD)"
-                value={d.minimum}
-                onChangeText={(value) => form.field("minimum", value)}
+                value={draft.minimumOrder}
+                onChangeText={(value) => form.setField("minimumOrder", value)}
                 keyboardType="decimal-pad"
                 hint="Set to 0.00 for no minimum."
               />
               <Field
                 label="Tax rate (%)"
-                value={d.tax}
-                onChangeText={(value) => form.field("tax", value)}
+                value={draft.taxRatePercent}
+                onChangeText={(value) => form.setField("taxRatePercent", value)}
                 keyboardType="decimal-pad"
                 hint="0–30%. Calculated once on the order subtotal."
               />
@@ -210,8 +212,8 @@ function SettingsForm({ settings }: { settings: Settings }) {
                 <Stack style={{ flex: 1 }}>
                   <Field
                     label="Opens at"
-                    value={d.openingTime}
-                    onChangeText={(value) => form.field("openingTime", value)}
+                    value={draft.openingTime}
+                    onChangeText={(value) => form.setField("openingTime", value)}
                     placeholder="09:00"
                     maxLength={5}
                   />
@@ -219,8 +221,8 @@ function SettingsForm({ settings }: { settings: Settings }) {
                 <Stack style={{ flex: 1 }}>
                   <Field
                     label="Closes at"
-                    value={d.closingTime}
-                    onChangeText={(value) => form.field("closingTime", value)}
+                    value={draft.closingTime}
+                    onChangeText={(value) => form.setField("closingTime", value)}
                     placeholder="22:00"
                     maxLength={5}
                   />
@@ -228,8 +230,8 @@ function SettingsForm({ settings }: { settings: Settings }) {
               </Row>
               <Field
                 label="Timezone"
-                value={d.timezone}
-                onChangeText={(value) => form.field("timezone", value)}
+                value={draft.timezone}
+                onChangeText={(value) => form.setField("timezone", value)}
                 placeholder="America/New_York"
                 autoCapitalize="none"
               />
@@ -259,7 +261,7 @@ function SettingsForm({ settings }: { settings: Settings }) {
       <Card padding={18}>
         <Row wrap style={{ justifyContent: "space-between" }}>
           <Row gap={8}>
-            {form.dirty ? (
+            {form.isDirty ? (
               <Badge tone="warning" dot>
                 Unsaved changes
               </Badge>
@@ -273,10 +275,14 @@ function SettingsForm({ settings }: { settings: Settings }) {
             )}
           </Row>
           <Row>
-            <Button variant="secondary" disabled={!form.dirty || form.saving} onPress={form.reset}>
+            <Button
+              variant="secondary"
+              disabled={!form.isDirty || form.saving}
+              onPress={form.reset}
+            >
               Discard changes
             </Button>
-            <Button disabled={!form.dirty} loading={form.saving} onPress={form.save}>
+            <Button disabled={!form.isDirty} loading={form.saving} onPress={form.save}>
               Save changes
             </Button>
           </Row>
@@ -285,9 +291,11 @@ function SettingsForm({ settings }: { settings: Settings }) {
     </Stack>
   );
 }
+/** Wait for persisted settings before mounting a form with its saved baseline. */
 export default function SettingsScreen() {
-  const query = useGetSettings();
-  if (query.isPending) return <LoadingState />;
-  if (query.isError) return <QueryError error={query.error} retry={query.refetch} />;
-  return <SettingsForm settings={query.data} />;
+  const settingsQuery = useGetSettings();
+  if (settingsQuery.isPending) return <LoadingState />;
+  if (settingsQuery.isError)
+    return <QueryError error={settingsQuery.error} retry={settingsQuery.refetch} />;
+  return <SettingsForm settings={settingsQuery.data} />;
 }

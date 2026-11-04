@@ -39,6 +39,7 @@ import {
 import { OrderDetailDialog } from "../components/order-dialogs";
 import { RevenueChart } from "../components/revenue-chart";
 
+/** Render a responsive KPI card; null change means the comparison period has no revenue/orders. */
 function Metric({
   label,
   value,
@@ -54,7 +55,7 @@ function Metric({
   icon: ReactNode;
   columns: number;
 }) {
-  const positive = (change ?? 0) >= 0;
+  const isPositiveChange = (change ?? 0) >= 0;
   const { width } = useWindowDimensions();
   const availableWidth = contentWidth(width);
   return (
@@ -74,8 +75,10 @@ function Metric({
           </Txt>
           <Row gap={6} wrap>
             {change !== undefined ? (
-              <Badge tone={change === null ? "neutral" : positive ? "success" : "danger"}>
-                {change === null ? "No prior data" : `${positive ? "+" : ""}${change.toFixed(1)}%`}
+              <Badge tone={change === null ? "neutral" : isPositiveChange ? "success" : "danger"}>
+                {change === null
+                  ? "No prior data"
+                  : `${isPositiveChange ? "+" : ""}${change.toFixed(1)}%`}
               </Badge>
             ) : null}
             <Txt size={10} color={t.color.muted}>
@@ -87,15 +90,17 @@ function Metric({
     </View>
   );
 }
+/** Combine period-based analytics with live operational counts and links into management flows. */
 export default function HomeScreen() {
   const [days, setDays] = useState(7);
-  const [selected, setSelected] = useState<string | null>(null);
-  const query = useGetSummary({ days }, { query: { refetchInterval: 15000 } });
-  const config = useGetSettings();
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const summaryQuery = useGetSummary({ days }, { query: { refetchInterval: 15000 } });
+  const settingsQuery = useGetSettings();
   const { width } = useWindowDimensions();
   const columns = width >= 1200 ? 4 : width >= 600 ? 2 : 1;
-  const data = query.data;
-  const settings = config.data;
+  // Summary fields already distinguish period totals from all-time operational counts.
+  const data = summaryQuery.data;
+  const settings = settingsQuery.data;
   const today = new Intl.DateTimeFormat("en-US", {
     weekday: "long",
     month: "long",
@@ -120,10 +125,10 @@ export default function HomeScreen() {
           />
         }
       />
-      {query.isPending ? (
+      {summaryQuery.isPending ? (
         <LoadingState />
-      ) : query.isError ? (
-        <QueryError error={query.error} retry={query.refetch} />
+      ) : summaryQuery.isError ? (
+        <QueryError error={summaryQuery.error} retry={summaryQuery.refetch} />
       ) : data ? (
         <>
           <Row wrap gap={18} style={{ justifyContent: "space-between", alignItems: "stretch" }}>
@@ -255,7 +260,7 @@ export default function HomeScreen() {
                 />
               </View>
               {data.recentOrders.length ? (
-                <OrdersTable rows={data.recentOrders} onSelect={setSelected} compact />
+                <OrdersTable rows={data.recentOrders} onSelect={setSelectedOrderId} compact />
               ) : (
                 <EmptyState
                   title="The counter is ready"
@@ -338,8 +343,12 @@ export default function HomeScreen() {
           A live view of your restaurant · Refreshes every 15 seconds
         </Txt>
       </Row>
-      {selected ? (
-        <OrderDetailDialog key={selected} id={selected} onClose={() => setSelected(null)} />
+      {selectedOrderId ? (
+        <OrderDetailDialog
+          key={selectedOrderId}
+          id={selectedOrderId}
+          onClose={() => setSelectedOrderId(null)}
+        />
       ) : null}
     </Stack>
   );

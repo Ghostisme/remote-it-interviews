@@ -32,29 +32,34 @@ import { CategoryManagerDialog, MenuLifecycleDialog } from "../components/menu-m
 import { useMenuActions } from "../features/menu/use-menu-form";
 import type { MenuAction } from "../features/menu/use-menu-management";
 
+/** Filter active/archived dishes and coordinate dish, category, and lifecycle dialogs. */
 export default function MenuScreen() {
-  const query = useGetMenu();
+  const menuQuery = useGetMenu();
   const actions = useMenuActions();
-  const [category, setCategory] = useState("all");
+  const [selectedCategoryId, setSelectedCategoryId] = useState("all");
   const [search, setSearch] = useState("");
   const [availability, setAvailability] = useState("all");
-  const [view, setView] = useState("active");
-  const [editing, setEditing] = useState<MenuItem | "new" | null>(null);
+  const [menuView, setMenuView] = useState("active");
+  const [editingMenuItem, setEditingMenuItem] = useState<MenuItem | "new" | null>(null);
   const [addingCategory, setAddingCategory] = useState(false);
   const [managingCategories, setManagingCategories] = useState(false);
-  const [command, setCommand] = useState<{ item: MenuItem; action: MenuAction } | null>(null);
+  const [lifecycleCommand, setLifecycleCommand] = useState<{
+    item: MenuItem;
+    action: MenuAction;
+  } | null>(null);
   const { width } = useWindowDimensions();
   const compactFilters = width < 650;
-  const columns = width >= 1400 ? 3 : width >= 1000 ? 2 : width >= 650 ? 2 : 1;
-  const itemWidth = (contentWidth(width) - (columns - 1) * 20) / columns;
-  const categories = query.data?.categories ?? [];
-  const allItems = query.data?.items ?? [];
+  const columnCount = width >= 1400 ? 3 : width >= 1000 ? 2 : width >= 650 ? 2 : 1;
+  // Use the same sidebar and gutter calculation as the shell to avoid mobile overflow.
+  const menuCardWidth = (contentWidth(width) - (columnCount - 1) * 20) / columnCount;
+  const categories = menuQuery.data?.categories ?? [];
+  const allItems = menuQuery.data?.items ?? [];
   const items = allItems.filter((item) =>
-    view === "archived" ? !!item.archivedAt : !item.archivedAt,
+    menuView === "archived" ? !!item.archivedAt : !item.archivedAt,
   );
-  const filtered = items.filter(
+  const visibleMenuItems = items.filter(
     (item) =>
-      (category === "all" || item.categoryId === category) &&
+      (selectedCategoryId === "all" || item.categoryId === selectedCategoryId) &&
       `${item.name} ${item.description}`.toLowerCase().includes(search.toLowerCase()) &&
       (availability === "all" || item.available === (availability === "available")),
   );
@@ -75,8 +80,8 @@ export default function MenuScreen() {
             </Button>
             <Button
               icon={<Plus size={16} color="white" />}
-              onPress={() => setEditing("new")}
-              disabled={!query.data}
+              onPress={() => setEditingMenuItem("new")}
+              disabled={!menuQuery.data}
             >
               Add menu item
             </Button>
@@ -87,9 +92,9 @@ export default function MenuScreen() {
         <Stack gap={16}>
           <Row wrap style={{ justifyContent: "space-between" }}>
             <Tabs
-              value={view}
+              value={menuView}
               onChange={(value) => {
-                setView(value);
+                setMenuView(value);
                 setAvailability("all");
               }}
               options={[
@@ -111,7 +116,7 @@ export default function MenuScreen() {
               label="Manage categories"
               icon={<SlidersHorizontal size={14} color={t.color.muted} />}
               onPress={() => setManagingCategories(true)}
-              disabled={!query.data}
+              disabled={!menuQuery.data}
             >
               {compactFilters ? undefined : "Manage categories"}
             </Button>
@@ -119,21 +124,21 @@ export default function MenuScreen() {
           {!compactFilters ? (
             <Row wrap style={{ justifyContent: "space-between" }}>
               <Tabs
-                value={category}
-                onChange={setCategory}
+                value={selectedCategoryId}
+                onChange={setSelectedCategoryId}
                 options={[
                   { value: "all", label: "All dishes", count: items.length },
-                  ...categories.map((c) => ({
-                    value: c.id,
-                    label: c.name,
-                    count: items.filter((i) => i.categoryId === c.id).length,
+                  ...categories.map((category) => ({
+                    value: category.id,
+                    label: category.name,
+                    count: items.filter((menuItem) => menuItem.categoryId === category.id).length,
                   })),
                 ]}
               />
-              <Badge tone={view === "archived" ? "neutral" : "success"} dot>
-                {view === "archived"
+              <Badge tone={menuView === "archived" ? "neutral" : "success"} dot>
+                {menuView === "archived"
                   ? "Hidden from new orders"
-                  : `${items.filter((i) => i.available).length} available`}
+                  : `${items.filter((menuItem) => menuItem.available).length} available`}
               </Badge>
             </Row>
           ) : null}
@@ -161,11 +166,11 @@ export default function MenuScreen() {
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Select
                   label="Menu category"
-                  value={category}
-                  onChange={setCategory}
+                  value={selectedCategoryId}
+                  onChange={setSelectedCategoryId}
                   options={[
                     { value: "all", label: `All dishes (${items.length})` },
-                    ...categories.map((c) => ({ value: c.id, label: c.name })),
+                    ...categories.map((category) => ({ value: category.id, label: category.name })),
                   ]}
                 />
               </View>
@@ -185,22 +190,22 @@ export default function MenuScreen() {
           ) : null}
         </Stack>
       </Card>
-      {query.isPending ? (
+      {menuQuery.isPending ? (
         <LoadingState />
-      ) : query.isError ? (
-        <QueryError error={query.error} retry={query.refetch} />
-      ) : filtered.length === 0 ? (
+      ) : menuQuery.isError ? (
+        <QueryError error={menuQuery.error} retry={menuQuery.refetch} />
+      ) : visibleMenuItems.length === 0 ? (
         <Card>
           <EmptyState
             title={
-              search || category !== "all" || availability !== "all"
+              search || selectedCategoryId !== "all" || availability !== "all"
                 ? "No dishes found"
-                : view === "archived"
+                : menuView === "archived"
                   ? "No archived dishes"
                   : "Your menu starts here"
             }
             message={
-              view === "archived"
+              menuView === "archived"
                 ? "Archived dishes stay here for safekeeping. You can restore them whenever you're ready."
                 : "Try another filter, or add something delicious to the menu."
             }
@@ -208,18 +213,18 @@ export default function MenuScreen() {
               <Button
                 variant="secondary"
                 onPress={() => {
-                  setCategory("all");
+                  setSelectedCategoryId("all");
                   setSearch("");
                   setAvailability("all");
                   if (!items.length) {
-                    if (view === "archived") setView("active");
-                    else setEditing("new");
+                    if (menuView === "archived") setMenuView("active");
+                    else setEditingMenuItem("new");
                   }
                 }}
               >
                 {items.length
                   ? "Clear filters"
-                  : view === "archived"
+                  : menuView === "archived"
                     ? "Back to active menu"
                     : "Add your first dish"}
               </Button>
@@ -228,8 +233,8 @@ export default function MenuScreen() {
         </Card>
       ) : (
         <Row wrap gap={20} style={{ alignItems: "stretch" }}>
-          {filtered.map((item) => (
-            <View key={item.id} style={{ width: itemWidth }}>
+          {visibleMenuItems.map((item) => (
+            <View key={item.id} style={{ width: menuCardWidth }}>
               <Card padding={0} style={{ overflow: "hidden", flex: 1 }}>
                 <View>
                   <FoodImage imageKey={item.imageKey} height={195} radius={0} />
@@ -250,7 +255,8 @@ export default function MenuScreen() {
                       </Badge>
                     ) : (
                       <Badge tone="neutral">
-                        {categories.find((c) => c.id === item.categoryId)?.name ?? "Menu"}
+                        {categories.find((category) => category.id === item.categoryId)?.name ??
+                          "Menu"}
                       </Badge>
                     )}
                   </View>
@@ -289,7 +295,7 @@ export default function MenuScreen() {
                           variant="secondary"
                           label={`Restore ${item.name}`}
                           icon={<RotateCcw size={13} color={t.color.brand} />}
-                          onPress={() => setCommand({ item, action: "restore" })}
+                          onPress={() => setLifecycleCommand({ item, action: "restore" })}
                         >
                           Restore
                         </Button>
@@ -298,7 +304,7 @@ export default function MenuScreen() {
                           variant="ghost"
                           label={`Delete ${item.name}`}
                           icon={<Trash2 size={14} color={t.color.danger} />}
-                          onPress={() => setCommand({ item, action: "delete" })}
+                          onPress={() => setLifecycleCommand({ item, action: "delete" })}
                         />
                       </Row>
                     ) : (
@@ -320,7 +326,7 @@ export default function MenuScreen() {
                       small
                       variant="secondary"
                       label={`Edit ${item.name}`}
-                      onPress={() => setEditing(item)}
+                      onPress={() => setEditingMenuItem(item)}
                       icon={<Pencil size={13} color={t.color.muted} />}
                     >
                       Edit
@@ -336,17 +342,17 @@ export default function MenuScreen() {
         Changes are saved to your menu immediately. Existing orders retain the price at the time
         they were placed.
       </Txt>
-      {editing ? (
+      {editingMenuItem ? (
         <MenuItemDialog
           categories={categories}
-          item={editing === "new" ? undefined : editing}
-          onClose={() => setEditing(null)}
+          item={editingMenuItem === "new" ? undefined : editingMenuItem}
+          onClose={() => setEditingMenuItem(null)}
           onArchive={
-            editing === "new"
+            editingMenuItem === "new"
               ? undefined
               : () => {
-                  setEditing(null);
-                  setCommand({ item: editing, action: "archive" });
+                  setEditingMenuItem(null);
+                  setLifecycleCommand({ item: editingMenuItem, action: "archive" });
                 }
           }
         />
@@ -364,15 +370,16 @@ export default function MenuScreen() {
           items={allItems}
           onClose={() => {
             setManagingCategories(false);
-            if (!categories.some((item) => item.id === category)) setCategory("all");
+            if (!categories.some((item) => item.id === selectedCategoryId))
+              setSelectedCategoryId("all");
           }}
         />
       ) : null}
-      {command ? (
+      {lifecycleCommand ? (
         <MenuLifecycleDialog
-          item={command.item}
-          action={command.action}
-          onClose={() => setCommand(null)}
+          item={lifecycleCommand.item}
+          action={lifecycleCommand.action}
+          onClose={() => setLifecycleCommand(null)}
         />
       ) : null}
     </Stack>

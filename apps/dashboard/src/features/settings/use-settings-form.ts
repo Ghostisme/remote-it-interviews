@@ -4,9 +4,10 @@ import { useToast } from "@odyssey/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Platform } from "react-native";
-import { parseMoney } from "../orders/cart";
+import { parseDecimalToHundredths } from "../orders/cart";
 
-const fromSettings = (settings: Settings) => ({
+/** Build editable strings without mixing display dollars/percent with stored cents/basis points. */
+const createSettingsDraft = (settings: Settings) => ({
   restaurantName: settings.restaurantName,
   acceptingOrders: settings.acceptingOrders,
   autoAccept: settings.autoAccept,
@@ -15,48 +16,52 @@ const fromSettings = (settings: Settings) => ({
   dineInEnabled: settings.dineInEnabled,
   prepTime: String(settings.prepTimeMinutes),
   deliveryFee: (settings.deliveryFeeCents / 100).toFixed(2),
-  minimum: (settings.minimumOrderCents / 100).toFixed(2),
-  tax: (settings.taxRateBps / 100).toFixed(2),
+  minimumOrder: (settings.minimumOrderCents / 100).toFixed(2),
+  taxRatePercent: (settings.taxRateBps / 100).toFixed(2),
   openingTime: settings.openingTime,
   closingTime: settings.closingTime,
   timezone: settings.timezone,
 });
+/** Manage validated preferences, an explicit saved baseline, and browser unsaved-change warnings. */
 export function useSettingsForm(settings: Settings) {
-  const [draft, setDraft] = useState(() => fromSettings(settings));
-  const [baseline, setBaseline] = useState(() => JSON.stringify(fromSettings(settings)));
+  const [draft, setDraft] = useState(() => createSettingsDraft(settings));
+  const [savedDraftSnapshot, setSavedDraftSnapshot] = useState(() =>
+    JSON.stringify(createSettingsDraft(settings)),
+  );
   const [error, setError] = useState("");
-  const update = useUpdateSettings();
-  const client = useQueryClient();
+  const updateSettingsMutation = useUpdateSettings();
+  const queryClient = useQueryClient();
   const toast = useToast();
-  const dirty = JSON.stringify(draft) !== baseline;
-  const field = <K extends keyof typeof draft>(key: K, value: (typeof draft)[K]) =>
+  const isDirty = JSON.stringify(draft) !== savedDraftSnapshot;
+  const setField = <K extends keyof typeof draft>(key: K, value: (typeof draft)[K]) =>
     setDraft((current) => ({ ...current, [key]: value }));
   const reset = () => {
-    const next = fromSettings(settings);
-    setDraft(next);
-    setBaseline(JSON.stringify(next));
+    const savedDraft = createSettingsDraft(settings);
+    setDraft(savedDraft);
+    setSavedDraftSnapshot(JSON.stringify(savedDraft));
     setError("");
   };
   useEffect(() => {
-    if (Platform.OS !== "web" || !dirty) return;
-    const warn = (event: BeforeUnloadEvent) => {
+    if (Platform.OS !== "web" || !isDirty) return;
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
       event.preventDefault();
       event.returnValue = "";
     };
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
-  }, [dirty]);
+    window.addEventListener("beforeunload", warnBeforeUnload);
+    return () => window.removeEventListener("beforeunload", warnBeforeUnload);
+  }, [isDirty]);
   const save = async () => {
     setError("");
     if (draft.restaurantName.trim().length < 2)
       return setError("Use at least 2 characters for the restaurant name.");
-    const fee = parseMoney(draft.deliveryFee);
-    const minimum = parseMoney(draft.minimum);
-    const tax = parseMoney(draft.tax);
-    if (fee === null || fee > 100000)
+    const deliveryFeeCents = parseDecimalToHundredths(draft.deliveryFee);
+    const minimumOrderCents = parseDecimalToHundredths(draft.minimumOrder);
+    const taxRateBps = parseDecimalToHundredths(draft.taxRatePercent);
+    if (deliveryFeeCents === null || deliveryFeeCents > 100000)
       return setError("Delivery fee must be between $0.00 and $1,000.00.");
-    if (minimum === null) return setError("Minimum order must be between $0.00 and $10,000.00.");
-    if (tax === null || tax > 3000)
+    if (minimumOrderCents === null)
+      return setError("Minimum order must be between $0.00 and $10,000.00.");
+    if (taxRateBps === null || taxRateBps > 3000)
       return setError("Tax must be between 0% and 30%, with up to 2 decimal places.");
     if (!/^\d+$/.test(draft.prepTime) || Number(draft.prepTime) < 5 || Number(draft.prepTime) > 120)
       return setError("Preparation time must be a whole number between 5 and 120 minutes.");
@@ -71,7 +76,7 @@ export function useSettingsForm(settings: Settings) {
     } catch {
       return setError("Enter a valid IANA timezone, such as America/New_York.");
     }
-    const data: UpdateSettings = {
+    const settingsPayload: UpdateSettings = {
       restaurantName: draft.restaurantName.trim(),
       currency: "USD",
       acceptingOrders: draft.acceptingOrders,
@@ -80,23 +85,24 @@ export function useSettingsForm(settings: Settings) {
       pickupEnabled: draft.pickupEnabled,
       dineInEnabled: draft.dineInEnabled,
       prepTimeMinutes: Number(draft.prepTime),
-      deliveryFeeCents: fee,
-      minimumOrderCents: minimum,
-      taxRateBps: tax,
+      deliveryFeeCents,
+      minimumOrderCents,
+      taxRateBps,
       openingTime: draft.openingTime,
       closingTime: draft.closingTime,
       timezone: draft.timezone,
     };
     try {
-      const result = await update.mutateAsync({ data });
-      const next = fromSettings(result);
-      setDraft(next);
-      setBaseline(JSON.stringify(next));
-      await client.invalidateQueries();
+      const savedSettings = await updateSettingsMutation.mutateAsync({ data: settingsPayload });
+      // Use the server response as the new baseline so reset and dirty state agree.
+      const savedDraft = createSettingsDraft(savedSettings);
+      setDraft(savedDraft);
+      setSavedDraftSnapshot(JSON.stringify(savedDraft));
+      await queryClient.invalidateQueries();
       toast("Settings saved. Your next orders will use these preferences.");
-    } catch (e) {
-      setError(errorMessage(e));
+    } catch (error) {
+      setError(errorMessage(error));
     }
   };
-  return { draft, field, dirty, error, save, reset, saving: update.isPending };
+  return { draft, setField, isDirty, error, save, reset, saving: updateSettingsMutation.isPending };
 }

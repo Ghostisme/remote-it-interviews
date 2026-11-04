@@ -36,6 +36,7 @@ import {
   useCompact,
 } from "./common";
 
+/** Compose an order with live service rules, customer selection, and a visible price breakdown. */
 export function NewOrderDialog({
   onClose,
   onCreated,
@@ -45,17 +46,17 @@ export function NewOrderDialog({
 }) {
   const draft = useOrderDraft(onCreated);
   const compact = useCompact();
-  const config = draft.config.data;
+  const settings = draft.settingsQuery.data;
   const preview = draft.preview;
-  const services = config
+  const services = settings
     ? [
-        { value: "pickup", label: "Pickup", enabled: config.pickupEnabled },
-        { value: "delivery", label: "Delivery", enabled: config.deliveryEnabled },
-        { value: "dine_in", label: "Dine in", enabled: config.dineInEnabled },
+        { value: "pickup", label: "Pickup", enabled: settings.pickupEnabled },
+        { value: "delivery", label: "Delivery", enabled: settings.deliveryEnabled },
+        { value: "dine_in", label: "Dine in", enabled: settings.dineInEnabled },
       ].filter((s) => s.enabled)
     : [];
   const serviceEnabled = services.some((s) => s.value === draft.fulfillment);
-  const error = draft.menu.error ?? draft.config.error ?? draft.customers.error;
+  const error = draft.menuQuery.error ?? draft.settingsQuery.error ?? draft.customersQuery.error;
   return (
     <Dialog
       visible
@@ -71,14 +72,16 @@ export function NewOrderDialog({
           onSubmit={draft.submit}
           loading={draft.saving}
           label={
-            preview?.lines.length ? `Place order · ${formatMoney(preview.total)}` : "Place order"
+            preview?.lines.length
+              ? `Place order · ${formatMoney(preview.totalCents)}`
+              : "Place order"
           }
           disabled={
-            !config?.acceptingOrders ||
+            !settings?.acceptingOrders ||
             !serviceEnabled ||
             !preview?.lines.length ||
-            preview.belowMinimum ||
-            preview.unavailable
+            preview.isBelowMinimum ||
+            preview.hasUnavailableItems
           }
         />
       }
@@ -87,16 +90,16 @@ export function NewOrderDialog({
         <QueryError
           error={error}
           retry={() => {
-            void draft.menu.refetch();
-            void draft.config.refetch();
-            void draft.customers.refetch();
+            void draft.menuQuery.refetch();
+            void draft.settingsQuery.refetch();
+            void draft.customersQuery.refetch();
           }}
         />
-      ) : !config || !draft.menu.data ? (
+      ) : !settings || !draft.menuQuery.data ? (
         <LoadingState />
       ) : (
         <Stack gap={20}>
-          {!config.acceptingOrders ? (
+          {!settings.acceptingOrders ? (
             <Banner
               message="New orders are paused. Enable accepting orders in Settings to continue."
               tone="warning"
@@ -120,10 +123,10 @@ export function NewOrderDialog({
                   value={draft.customerId}
                   onChange={draft.setCustomerId}
                   options={
-                    draft.customers.data?.data.map((c) => ({
-                      value: c.id,
-                      label: c.name,
-                      description: c.email ?? undefined,
+                    draft.customersQuery.data?.data.map((customer) => ({
+                      value: customer.id,
+                      label: customer.name,
+                      description: customer.email ?? undefined,
                     })) ?? []
                   }
                 />
@@ -144,16 +147,16 @@ export function NewOrderDialog({
                   2. Something delicious
                 </Txt>
                 <SearchField
-                  value={draft.search}
-                  onChange={draft.setSearch}
+                  value={draft.menuSearch}
+                  onChange={draft.setMenuSearch}
                   placeholder="Find a dish"
                 />
-                {draft.menu.data.items
+                {draft.menuQuery.data.items
                   .filter((item) => !item.archivedAt)
                   .filter((item) =>
                     `${item.name} ${item.description}`
                       .toLowerCase()
-                      .includes(draft.search.toLowerCase()),
+                      .includes(draft.menuSearch.toLowerCase()),
                   )
                   .map((item) => (
                     <Row
@@ -250,8 +253,8 @@ export function NewOrderDialog({
                   {draft.fulfillment === "delivery" ? (
                     <Field
                       label="Delivery address"
-                      value={draft.address}
-                      onChangeText={draft.setAddress}
+                      value={draft.deliveryAddress}
+                      onChangeText={draft.setDeliveryAddress}
                       placeholder="Street, apartment, city"
                       multiline
                       maxLength={300}
@@ -268,9 +271,9 @@ export function NewOrderDialog({
                   {preview ? (
                     <Stack gap={8}>
                       {[
-                        ["Subtotal", preview.subtotal],
-                        [`Tax (${config.taxRateBps / 100}%)`, preview.tax],
-                        ["Delivery", preview.delivery],
+                        ["Subtotal", preview.subtotalCents],
+                        [`Tax (${settings.taxRateBps / 100}%)`, preview.taxCents],
+                        ["Delivery", preview.deliveryFeeCents],
                       ].map(([label, value]) => (
                         <Row key={label} style={{ justifyContent: "space-between" }}>
                           <Txt size={12} color={t.color.muted}>
@@ -289,12 +292,12 @@ export function NewOrderDialog({
                       >
                         <Txt weight="semibold">Total</Txt>
                         <Txt size={21} weight="semibold">
-                          {formatMoney(preview.total)}
+                          {formatMoney(preview.totalCents)}
                         </Txt>
                       </Row>
-                      {preview.belowMinimum ? (
+                      {preview.isBelowMinimum ? (
                         <Txt size={11} color={t.color.warning}>
-                          Minimum subtotal: {formatMoney(config.minimumOrderCents)}
+                          Minimum subtotal: {formatMoney(settings.minimumOrderCents)}
                         </Txt>
                       ) : null}
                     </Stack>
@@ -302,7 +305,7 @@ export function NewOrderDialog({
                 </Stack>
               </Card>
               <Txt size={10} color={t.color.muted}>
-                Estimated preparation: {config.prepTimeMinutes} minutes. The final price is
+                Estimated preparation: {settings.prepTimeMinutes} minutes. The final price is
                 confirmed when your order is placed.
               </Txt>
             </Stack>
@@ -313,6 +316,7 @@ export function NewOrderDialog({
   );
 }
 
+// Keep button copy separate from the server-owned set of allowed transitions.
 const actionLabels: Record<OrderAction, string> = {
   accept: "Accept order",
   prepare: "Start preparing",
@@ -320,33 +324,35 @@ const actionLabels: Record<OrderAction, string> = {
   complete: "Complete order",
   cancel: "Cancel order",
 };
-export function OrderDetailDialog({ id, onClose }: { id: string; onClose: () => void }) {
-  const query = useGetOrder(id, { query: { refetchInterval: 10000 } });
-  const mutation = useApplyOrderAction();
-  const client = useQueryClient();
+/** Display immutable order snapshots and submit version-checked lifecycle actions. */
+export function OrderDetailDialog({ id: orderId, onClose }: { id: string; onClose: () => void }) {
+  const orderQuery = useGetOrder(orderId, { query: { refetchInterval: 10000 } });
+  const applyActionMutation = useApplyOrderAction();
+  const queryClient = useQueryClient();
   const toast = useToast();
   const [error, setError] = useState("");
-  const [cancelling, setCancelling] = useState(false);
-  const [note, setNote] = useState("");
-  const detail = query.data;
-  const apply = async (action: OrderAction) => {
+  const [isConfirmingCancellation, setConfirmingCancellation] = useState(false);
+  const [cancellationReason, setCancellationReason] = useState("");
+  const detail = orderQuery.data;
+  const applyOrderAction = async (action: OrderAction) => {
     if (!detail) return;
     setError("");
     try {
-      await mutation.mutateAsync({
-        id,
+      await applyActionMutation.mutateAsync({
+        id: orderId,
         data: {
           action,
+          // A stale screen must refresh instead of overwriting another operator's action.
           version: detail.order.version,
-          note: action === "cancel" ? note : undefined,
+          note: action === "cancel" ? cancellationReason : undefined,
         },
       });
-      await client.invalidateQueries();
-      setCancelling(false);
+      await queryClient.invalidateQueries();
+      setConfirmingCancellation(false);
       toast(action === "cancel" ? "Order cancelled." : `${actionLabels[action]} — done.`);
-    } catch (e) {
-      setError(errorMessage(e));
-      await client.invalidateQueries();
+    } catch (error) {
+      setError(errorMessage(error));
+      await queryClient.invalidateQueries();
     }
   };
   return (
@@ -364,16 +370,19 @@ export function OrderDetailDialog({ id, onClose }: { id: string; onClose: () => 
               Close
             </Button>
             <Row wrap>
-              {!cancelling ? (
+              {!isConfirmingCancellation ? (
                 detail.allowedActions.map((action) => (
                   <Button
                     key={action}
                     variant={action === "cancel" ? "danger" : "primary"}
-                    loading={mutation.isPending && mutation.variables?.data.action === action}
-                    disabled={mutation.isPending}
+                    loading={
+                      applyActionMutation.isPending &&
+                      applyActionMutation.variables?.data.action === action
+                    }
+                    disabled={applyActionMutation.isPending}
                     onPress={() => {
-                      if (action === "cancel") setCancelling(true);
-                      else void apply(action);
+                      if (action === "cancel") setConfirmingCancellation(true);
+                      else void applyOrderAction(action);
                     }}
                   >
                     {actionLabels[action]}
@@ -383,15 +392,15 @@ export function OrderDetailDialog({ id, onClose }: { id: string; onClose: () => 
                 <>
                   <Button
                     variant="secondary"
-                    onPress={() => setCancelling(false)}
-                    disabled={mutation.isPending}
+                    onPress={() => setConfirmingCancellation(false)}
+                    disabled={applyActionMutation.isPending}
                   >
                     Keep order
                   </Button>
                   <Button
                     variant="danger"
-                    loading={mutation.isPending}
-                    onPress={() => apply("cancel")}
+                    loading={applyActionMutation.isPending}
+                    onPress={() => applyOrderAction("cancel")}
                   >
                     Confirm cancellation
                   </Button>
@@ -402,14 +411,14 @@ export function OrderDetailDialog({ id, onClose }: { id: string; onClose: () => 
         ) : undefined
       }
     >
-      {query.isPending ? (
+      {orderQuery.isPending ? (
         <LoadingState />
-      ) : query.error ? (
-        <QueryError error={query.error} retry={() => void query.refetch()} />
+      ) : orderQuery.error ? (
+        <QueryError error={orderQuery.error} retry={() => void orderQuery.refetch()} />
       ) : detail ? (
         <Stack gap={22}>
           {error ? <Banner tone="danger" message={error} /> : null}
-          {cancelling ? (
+          {isConfirmingCancellation ? (
             <Stack gap={10}>
               <Banner
                 tone="warning"
@@ -417,8 +426,8 @@ export function OrderDetailDialog({ id, onClose }: { id: string; onClose: () => 
               />
               <Field
                 label="Cancellation reason (optional)"
-                value={note}
-                onChangeText={setNote}
+                value={cancellationReason}
+                onChangeText={setCancellationReason}
                 maxLength={300}
               />
             </Stack>

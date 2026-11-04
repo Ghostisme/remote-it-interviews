@@ -19,6 +19,7 @@ import { useState } from "react";
 import { useMenuForm } from "../features/menu/use-menu-form";
 import { FoodImage, FormActions, titleCase } from "./common";
 
+/** Edit dish details and a bundled cover image without changing historical order snapshots. */
 export function MenuItemDialog({
   categories,
   item,
@@ -100,7 +101,10 @@ export function MenuItemDialog({
                   label="Category"
                   value={form.categoryId}
                   onChange={form.setCategoryId}
-                  options={categories.map((c) => ({ value: c.id, label: c.name }))}
+                  options={categories.map((category) => ({
+                    value: category.id,
+                    label: category.name,
+                  }))}
                 />
               </Stack>
             </Row>
@@ -166,6 +170,7 @@ export function MenuItemDialog({
   );
 }
 
+/** Share category-name validation between creation and editing, with optional display order. */
 export function CategoryDialog({
   category,
   onClose,
@@ -188,8 +193,8 @@ export function CategoryDialog({
     try {
       await onSave(name, Number(sortOrder));
       onClose();
-    } catch (e) {
-      setError(errorMessage(e));
+    } catch (error) {
+      setError(errorMessage(error));
     }
   };
   return (

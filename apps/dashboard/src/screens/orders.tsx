@@ -21,26 +21,28 @@ import { OrdersTable, PageHeading, QueryError, Tabs, titleCase } from "../compon
 import { NewOrderDialog, OrderDetailDialog } from "../components/order-dialogs";
 import { useDebounced } from "../features/use-debounced";
 
+/** Browse server-paginated orders, synchronize deep links, and open creation/detail workflows. */
 export default function OrdersScreen() {
   const params = useLocalSearchParams<{ new?: string; id?: string }>();
-  const [creating, setCreating] = useState(params.new === "1");
-  const [selected, setSelected] = useState<string | null>(params.id ?? null);
+  const [isCreatingOrder, setCreatingOrder] = useState(params.new === "1");
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(params.id ?? null);
   const [status, setStatus] = useState<OrderStatus | undefined>();
   const [period, setPeriod] = useState<"all" | "today" | "week">("all");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const debounced = useDebounced(search);
-  const query = useGetOrders(
-    { page, pageSize: 10, search: debounced || undefined, status, period },
+  const debouncedSearch = useDebounced(search);
+  const ordersQuery = useGetOrders(
+    { page, pageSize: 10, search: debouncedSearch || undefined, status, period },
     { query: { refetchInterval: 15000 } },
   );
+  // Deep links from dashboard and CRM must also work when this screen is already mounted.
   useEffect(() => {
-    if (params.new === "1") setCreating(true);
-    if (params.id) setSelected(params.id);
+    if (params.new === "1") setCreatingOrder(true);
+    if (params.id) setSelectedOrderId(params.id);
   }, [params.new, params.id]);
-  const close = () => {
-    setCreating(false);
-    setSelected(null);
+  const closeOrderDialogs = () => {
+    setCreatingOrder(false);
+    setSelectedOrderId(null);
     if (params.id || params.new) router.setParams({ id: undefined, new: undefined });
   };
   return (
@@ -50,7 +52,7 @@ export default function OrdersScreen() {
         title="Every order, in good hands."
         subtitle="From the first craving to the last happy bite."
         action={
-          <Button icon={<Plus size={16} color="white" />} onPress={() => setCreating(true)}>
+          <Button icon={<Plus size={16} color="white" />} onPress={() => setCreatingOrder(true)}>
             Create order
           </Button>
         }
@@ -75,10 +77,13 @@ export default function OrdersScreen() {
                 }}
                 options={[
                   { value: "all", label: "All orders" },
-                  ...Object.values(OrderStatus).map((s) => ({ value: s, label: titleCase(s) })),
+                  ...Object.values(OrderStatus).map((orderStatus) => ({
+                    value: orderStatus,
+                    label: titleCase(orderStatus),
+                  })),
                 ]}
               />
-              <Badge tone="neutral">{query.data?.pagination.total ?? "—"} orders</Badge>
+              <Badge tone="neutral">{ordersQuery.data?.pagination.total ?? "—"} orders</Badge>
             </Row>
             <Row wrap>
               <SearchField
@@ -108,15 +113,15 @@ export default function OrdersScreen() {
             </Row>
           </Stack>
         </View>
-        {query.isPending ? (
+        {ordersQuery.isPending ? (
           <View style={{ padding: 24 }}>
             <LoadingState />
           </View>
-        ) : query.error ? (
+        ) : ordersQuery.error ? (
           <View style={{ padding: 24 }}>
-            <QueryError error={query.error} retry={() => void query.refetch()} />
+            <QueryError error={ordersQuery.error} retry={() => void ordersQuery.refetch()} />
           </View>
-        ) : !query.data?.data.length ? (
+        ) : !ordersQuery.data?.data.length ? (
           <EmptyState
             title={search || status ? "No matching orders" : "Ready for your first order?"}
             message={
@@ -137,14 +142,16 @@ export default function OrdersScreen() {
                   Clear filters
                 </Button>
               ) : (
-                <Button onPress={() => setCreating(true)}>Create order</Button>
+                <Button onPress={() => setCreatingOrder(true)}>Create order</Button>
               )
             }
           />
         ) : (
-          <OrdersTable rows={query.data.data} onSelect={setSelected} />
+          <OrdersTable rows={ordersQuery.data.data} onSelect={setSelectedOrderId} />
         )}
-        {query.data ? <Pagination {...query.data.pagination} onChange={setPage} /> : null}
+        {ordersQuery.data ? (
+          <Pagination {...ordersQuery.data.pagination} onChange={setPage} />
+        ) : null}
       </Card>
       <Row>
         <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: t.color.success }} />
@@ -152,18 +159,18 @@ export default function OrdersScreen() {
           Orders refresh automatically every 15 seconds.
         </Txt>
       </Row>
-      {creating ? (
+      {isCreatingOrder ? (
         <NewOrderDialog
-          onClose={close}
+          onClose={closeOrderDialogs}
           onCreated={(id) => {
-            setCreating(false);
-            setSelected(id);
+            setCreatingOrder(false);
+            setSelectedOrderId(id);
             router.setParams({ new: undefined, id });
           }}
         />
       ) : null}
-      {selected && !creating ? (
-        <OrderDetailDialog key={selected} id={selected} onClose={close} />
+      {selectedOrderId && !isCreatingOrder ? (
+        <OrderDetailDialog key={selectedOrderId} id={selectedOrderId} onClose={closeOrderDialogs} />
       ) : null}
     </Stack>
   );

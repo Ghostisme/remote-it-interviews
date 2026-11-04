@@ -11,6 +11,7 @@ import {
 import { FoodImage, FormActions } from "./common";
 import { CategoryDialog } from "./menu-dialogs";
 
+/** Explain archive, restore, and guarded permanent deletion before applying the chosen action. */
 export function MenuLifecycleDialog({
   item,
   action,
@@ -85,6 +86,7 @@ export function MenuLifecycleDialog({
   );
 }
 
+/** Manage category identities and count archived dishes when deciding whether deletion is possible. */
 export function CategoryManagerDialog({
   categories,
   items,
@@ -104,8 +106,8 @@ export function CategoryManagerDialog({
     try {
       await actions.deleteCategory(removing);
       setRemoving(null);
-    } catch (e) {
-      setError(errorMessage(e));
+    } catch (error) {
+      setError(errorMessage(error));
     }
   };
   return (
@@ -183,7 +185,7 @@ export function CategoryManagerDialog({
         <CategoryDialog
           category={editing}
           onClose={() => setEditing(null)}
-          onSave={(name, order) => actions.save(editing, name, order)}
+          onSave={(name, sortOrder) => actions.save(editing, name, sortOrder)}
           saving={actions.saving}
         />
       ) : null}

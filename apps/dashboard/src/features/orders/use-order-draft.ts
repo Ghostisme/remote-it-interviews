@@ -9,60 +9,65 @@ import type { CreateOrder } from "@odyssey/types";
 import { useToast } from "@odyssey/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
-import { changeQuantity, previewOrder } from "./cart";
+import { type CartQuantities, calculateOrderPreview, changeQuantity } from "./cart";
 
-export function useOrderDraft(onCreated: (id: string) => void) {
-  const menu = useGetMenu();
-  const config = useGetSettings();
+/** Coordinate the order composer, advisory pricing, and retry-safe order creation. */
+export function useOrderDraft(onCreated: (orderId: string) => void) {
+  const menuQuery = useGetMenu();
+  const settingsQuery = useGetSettings();
   const [customerSearch, setCustomerSearch] = useState("");
-  const customers = useGetCustomers({ pageSize: 50, search: customerSearch || undefined });
+  const customersQuery = useGetCustomers({ pageSize: 50, search: customerSearch || undefined });
   const [customerId, setCustomerId] = useState("");
   const [fulfillment, setFulfillment] = useState<CreateOrder["fulfillment"]>("pickup");
-  const [cart, setCart] = useState<Record<string, number>>({});
+  const [cart, setCart] = useState<CartQuantities>({});
   const [notes, setNotes] = useState("");
-  const [address, setAddress] = useState("");
-  const [search, setSearch] = useState("");
+  const [deliveryAddress, setDeliveryAddress] = useState("");
+  const [menuSearch, setMenuSearch] = useState("");
   const [error, setError] = useState("");
-  const key = useRef({ fingerprint: "", id: "" });
-  const client = useQueryClient();
+  const idempotencyRef = useRef({ fingerprint: "", key: "" });
+  const queryClient = useQueryClient();
   const toast = useToast();
-  const create = useCreateOrder();
-  const preview = config.data
-    ? previewOrder(cart, menu.data?.items ?? [], config.data, fulfillment)
+  const createOrderMutation = useCreateOrder();
+  const preview = settingsQuery.data
+    ? calculateOrderPreview(cart, menuQuery.data?.items ?? [], settingsQuery.data, fulfillment)
     : null;
   const submit = async () => {
     setError("");
     if (!customerId) return setError("Choose a customer for this order.");
     if (!preview?.lines.length) return setError("Add at least one item to the order.");
-    if (preview.unavailable)
+    if (preview.hasUnavailableItems)
       return setError("Remove sold-out or archived dishes before placing this order.");
-    if (fulfillment === "delivery" && !address.trim()) return setError("Enter a delivery address.");
-    const content = {
+    if (fulfillment === "delivery" && !deliveryAddress.trim())
+      return setError("Enter a delivery address.");
+    const orderPayload = {
       customerId,
       fulfillment,
       notes: notes.trim(),
-      deliveryAddress: fulfillment === "delivery" ? address.trim() : null,
+      deliveryAddress: fulfillment === "delivery" ? deliveryAddress.trim() : null,
       items: preview.lines.map((line) => ({ menuItemId: line.item.id, quantity: line.quantity })),
     };
-    const fingerprint = JSON.stringify(content);
-    if (key.current.fingerprint !== fingerprint)
-      key.current = { fingerprint, id: crypto.randomUUID() };
+    // Reuse the key after an uncertain response; a changed payload starts a new intent.
+    const fingerprint = JSON.stringify(orderPayload);
+    if (idempotencyRef.current.fingerprint !== fingerprint)
+      idempotencyRef.current = { fingerprint, key: crypto.randomUUID() };
     try {
-      const detail = await create.mutateAsync({
-        data: { ...content, idempotencyKey: key.current.id },
+      const detail = await createOrderMutation.mutateAsync({
+        data: { ...orderPayload, idempotencyKey: idempotencyRef.current.key },
       });
-      await client.invalidateQueries();
+      // Orders also affect dashboard totals, customer spend, and menu popularity.
+      await queryClient.invalidateQueries();
       toast("Order placed. Let's make something delicious.");
       onCreated(detail.order.id);
-    } catch (e) {
-      setError(errorMessage(e));
-      await client.invalidateQueries();
+    } catch (error) {
+      setError(errorMessage(error));
+      // Refresh stale menu/settings data when the server rejects a draft.
+      await queryClient.invalidateQueries();
     }
   };
   return {
-    menu,
-    config,
-    customers,
+    menuQuery,
+    settingsQuery,
+    customersQuery,
     customerSearch,
     setCustomerSearch,
     customerId,
@@ -70,16 +75,17 @@ export function useOrderDraft(onCreated: (id: string) => void) {
     fulfillment,
     setFulfillment,
     cart,
-    adjust: (id: string, delta: number) => setCart((current) => changeQuantity(current, id, delta)),
+    adjust: (menuItemId: string, quantityChange: number) =>
+      setCart((current) => changeQuantity(current, menuItemId, quantityChange)),
     notes,
     setNotes,
-    address,
-    setAddress,
-    search,
-    setSearch,
+    deliveryAddress,
+    setDeliveryAddress,
+    menuSearch,
+    setMenuSearch,
     error,
     preview,
     submit,
-    saving: create.isPending,
+    saving: createOrderMutation.isPending,
   };
 }

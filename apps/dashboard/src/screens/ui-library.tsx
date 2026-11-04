@@ -23,11 +23,12 @@ import { useState } from "react";
 import { View } from "react-native";
 import { PageHeading, SectionHeading, Tabs, useCompact } from "../components/common";
 
+/** Exercise the shared design tokens and interactive primitives in an inspectable reference page. */
 export default function UILibraryScreen() {
-  const [dialog, setDialog] = useState(false);
-  const [checked, setChecked] = useState(true);
-  const [select, setSelect] = useState("pickup");
-  const [tab, setTab] = useState("all");
+  const [isDialogVisible, setDialogVisible] = useState(false);
+  const [isToggleEnabled, setToggleEnabled] = useState(true);
+  const [fulfillment, setFulfillment] = useState("pickup");
+  const [activeTab, setActiveTab] = useState("all");
   const toast = useToast();
   const compact = useCompact();
   return (
@@ -170,7 +171,7 @@ export default function UILibraryScreen() {
             >
               Primary action
             </Button>
-            <Button variant="secondary" onPress={() => setDialog(true)}>
+            <Button variant="secondary" onPress={() => setDialogVisible(true)}>
               Open dialog
             </Button>
             <Button variant="ghost" onPress={() => toast("A quiet little action.", "info")}>
@@ -201,25 +202,29 @@ export default function UILibraryScreen() {
             <View style={{ width: 240 }}>
               <Select
                 label="Service type"
-                value={select}
+                value={fulfillment}
                 options={[
                   { value: "pickup", label: "Pickup" },
                   { value: "delivery", label: "Delivery" },
                 ]}
-                onChange={setSelect}
+                onChange={setFulfillment}
               />
             </View>
             <Row>
-              <Toggle value={checked} onChange={setChecked} label="Example availability" />
-              <Txt size={12}>{checked ? "Available" : "Unavailable"}</Txt>
+              <Toggle
+                value={isToggleEnabled}
+                onChange={setToggleEnabled}
+                label="Example availability"
+              />
+              <Txt size={12}>{isToggleEnabled ? "Available" : "Unavailable"}</Txt>
             </Row>
             <Avatar name="Sophie Chen" />
             <Avatar name="James Wilson" tone="orange" />
             <Avatar name="Emma Thompson" tone="violet" />
           </Row>
           <Tabs
-            value={tab}
-            onChange={setTab}
+            value={activeTab}
+            onChange={setActiveTab}
             options={[
               { value: "all", label: "All items", count: 12 },
               { value: "available", label: "Available", count: 11 },
@@ -255,7 +260,7 @@ export default function UILibraryScreen() {
                 title="A fresh start"
                 message="Add your first item to bring this space to life."
                 action={
-                  <Button small onPress={() => setDialog(true)}>
+                  <Button small onPress={() => setDialogVisible(true)}>
                     Add an item
                   </Button>
                 }
@@ -291,18 +296,18 @@ export default function UILibraryScreen() {
         />
       </Card>
       <Dialog
-        visible={dialog}
+        visible={isDialogVisible}
         title="A little space to focus"
         subtitle="Dialogs keep a task close, without losing your place."
-        onClose={() => setDialog(false)}
+        onClose={() => setDialogVisible(false)}
         footer={
           <Row style={{ justifyContent: "flex-end" }}>
-            <Button variant="secondary" onPress={() => setDialog(false)}>
+            <Button variant="secondary" onPress={() => setDialogVisible(false)}>
               Cancel
             </Button>
             <Button
               onPress={() => {
-                setDialog(false);
+                setDialogVisible(false);
                 toast("Example saved successfully.");
               }}
             >
