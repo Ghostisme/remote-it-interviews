@@ -2,6 +2,7 @@ import { swaggerUI } from "@hono/swagger-ui";
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { asc, eq, sql } from "drizzle-orm";
 import { cors } from "hono/cors";
+import { HTTPException } from "hono/http-exception";
 import * as C from "./contracts";
 import { connectDatabase, type Database } from "./db/client";
 import { categories, customers, menuItems, settings } from "./db/schema";
@@ -121,7 +122,7 @@ export function createApp(database?: Database) {
         },
         400,
       );
-    if (error instanceof SyntaxError)
+    if (error instanceof SyntaxError || (error instanceof HTTPException && error.status === 400))
       return c.json(
         {
           error: { code: "INVALID_JSON", message: "The request must contain valid JSON." },

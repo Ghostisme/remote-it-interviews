@@ -136,6 +136,21 @@ describe("PostgreSQL-backed restaurant API", () => {
     const list = C.OrderList.parse(await (await request("/api/orders")).json());
     expect(list.pagination.total).toBe(0);
   });
+  it("returns a typed client error for malformed JSON without creating orders", async () => {
+    for (const body of ["{", "", '{"items":]']) {
+      const result = await app.request("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+      });
+      expect(result.status).toBe(400);
+      const error = C.ApiError.parse(await result.json());
+      expect(error.error.code).toBe("INVALID_JSON");
+      expect(error.requestId).toBe(result.headers.get("X-Request-Id"));
+    }
+    const list = C.OrderList.parse(await (await request("/api/orders")).json());
+    expect(list.pagination.total).toBe(0);
+  });
   it("serializes concurrent retries and rejects reusing a key for different content", async () => {
     const payload = input();
     const results = await Promise.all([
