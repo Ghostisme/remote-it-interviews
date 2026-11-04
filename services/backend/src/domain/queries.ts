@@ -25,6 +25,7 @@ export async function listOrders(
       : query.period === "week"
         ? new Date(Date.now() - 7 * 86400000)
         : undefined;
+  const numberSearch = query.search?.match(/^#?(?:OE-)?(\d+)$/i)?.[1]?.replace(/^0+(?=\d)/, "");
   const where = and(
     query.status ? eq(orders.status, query.status) : undefined,
     query.fulfillment ? eq(orders.fulfillment, query.fulfillment) : undefined,
@@ -33,7 +34,9 @@ export async function listOrders(
     query.search
       ? or(
           ilike(customers.name, `%${query.search}%`),
-          sql`cast(${orders.number} as text) ilike ${`%${query.search.replace(/^#/, "")}%`}`,
+          numberSearch
+            ? sql`cast(${orders.number} as text) ilike ${`%${numberSearch}%`}`
+            : undefined,
         )
       : undefined,
   );

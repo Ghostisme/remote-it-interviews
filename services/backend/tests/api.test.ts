@@ -87,6 +87,34 @@ describe("PostgreSQL-backed restaurant API", () => {
     expect(stored.items[0]?.unitPriceCents).toBe(1299);
     expect(stored.order).not.toHaveProperty("requestHash");
   });
+  it("finds orders by the displayed number, padded number and customer name", async () => {
+    const detail = C.OrderDetail.parse(
+      await (await request("/api/orders", "POST", input())).json(),
+    );
+    const number = String(detail.order.number);
+    const padded = number.padStart(4, "0");
+    for (const search of [
+      number,
+      padded,
+      `#${padded}`,
+      `#OE-${padded}`,
+      `oe-${padded}`,
+      "Customer",
+    ]) {
+      const result = await request(`/api/orders?search=${encodeURIComponent(search)}`);
+      expect(result.status).toBe(200);
+      const list = C.OrderList.parse(await result.json());
+      expect(
+        list.data.map((order) => order.id),
+        search,
+      ).toEqual([detail.order.id]);
+      expect(list.pagination.total, search).toBe(1);
+    }
+    const missing = C.OrderList.parse(
+      await (await request("/api/orders?search=%23OE-9999")).json(),
+    );
+    expect(missing.data).toEqual([]);
+  });
   it("rejects invalid and forged input without creating orders", async () => {
     for (const value of [
       { ...input(), totalCents: 1 },

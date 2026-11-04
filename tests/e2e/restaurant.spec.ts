@@ -260,7 +260,8 @@ test("menu → customer → settings → delivery → kitchen → CRM → revenu
       await page.getByRole("button", { name: "Close", exact: true }).click();
       await page
         .getByRole("textbox", { name: "Search order number or customer", exact: true })
-        .fill(guestName);
+        .fill(orderNumber);
+      await expect(page.getByText("1 orders", { exact: true })).toBeVisible();
       await expect(page.getByText(orderNumber, { exact: true })).toBeVisible();
     });
 
