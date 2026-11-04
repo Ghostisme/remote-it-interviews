@@ -13,6 +13,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
+/** Persist kitchen states once; validation and allowed-action types derive from this enum. */
 export const orderStatus = pgEnum("order_status", [
   "pending",
   "accepted",
@@ -21,7 +22,9 @@ export const orderStatus = pgEnum("order_status", [
   "completed",
   "cancelled",
 ]);
+/** Supported service types used by settings, order validation and checkout. */
 export const fulfillment = pgEnum("fulfillment", ["delivery", "pickup", "dine_in"]);
+/** Audit commands recorded whenever an operator moves an order between states. */
 export const orderAction = pgEnum("order_action", [
   "accept",
   "prepare",
@@ -35,6 +38,7 @@ const timestamps = {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 };
 
+/** Stable category identities with an explicit sort order and unique display names. */
 export const categories = pgTable(
   "categories",
   {
@@ -42,9 +46,10 @@ export const categories = pgTable(
     name: text("name").notNull(),
     sortOrder: integer("sort_order").notNull().default(0),
   },
-  (t) => [uniqueIndex("category_name_idx").on(t.name)],
+  (table) => [uniqueIndex("category_name_idx").on(table.name)],
 );
 
+/** Current sellable dish data; archiving preserves references from historical order lines. */
 export const menuItems = pgTable(
   "menu_items",
   {
@@ -61,12 +66,13 @@ export const menuItems = pgTable(
     archivedAt: timestamp("archived_at", { withTimezone: true }),
     ...timestamps,
   },
-  (t) => [
-    index("menu_category_idx").on(t.categoryId),
-    check("menu_price_positive", sql`${t.priceCents} > 0 AND ${t.priceCents} <= 1000000`),
+  (table) => [
+    index("menu_category_idx").on(table.categoryId),
+    check("menu_price_positive", sql`${table.priceCents} > 0 AND ${table.priceCents} <= 1000000`),
   ],
 );
 
+/** Guest contact details and internal notes; email uniqueness allows absent contact data. */
 export const customers = pgTable(
   "customers",
   {
@@ -77,9 +83,10 @@ export const customers = pgTable(
     notes: text("notes").notNull().default(""),
     ...timestamps,
   },
-  (t) => [uniqueIndex("customer_email_idx").on(t.email)],
+  (table) => [uniqueIndex("customer_email_idx").on(table.email)],
 );
 
+/** Single-restaurant configuration enforced by the id = 1 database constraint. */
 export const settings = pgTable(
   "settings",
   {
@@ -100,15 +107,16 @@ export const settings = pgTable(
     timezone: text("timezone").notNull().default("America/New_York"),
     updatedAt: timestamps.updatedAt,
   },
-  (t) => [
-    check("settings_singleton", sql`${t.id} = 1`),
-    check("settings_prep_time", sql`${t.prepTimeMinutes} BETWEEN 5 AND 120`),
-    check("settings_fee", sql`${t.deliveryFeeCents} BETWEEN 0 AND 100000`),
-    check("settings_minimum", sql`${t.minimumOrderCents} BETWEEN 0 AND 1000000`),
-    check("settings_tax", sql`${t.taxRateBps} BETWEEN 0 AND 3000`),
+  (table) => [
+    check("settings_singleton", sql`${table.id} = 1`),
+    check("settings_prep_time", sql`${table.prepTimeMinutes} BETWEEN 5 AND 120`),
+    check("settings_fee", sql`${table.deliveryFeeCents} BETWEEN 0 AND 100000`),
+    check("settings_minimum", sql`${table.minimumOrderCents} BETWEEN 0 AND 1000000`),
+    check("settings_tax", sql`${table.taxRateBps} BETWEEN 0 AND 3000`),
   ],
 );
 
+/** Integer-cent financial snapshot with unique retry identity and optimistic status version. */
 export const orders = pgTable(
   "orders",
   {
@@ -130,16 +138,17 @@ export const orders = pgTable(
     version: integer("version").notNull().default(0),
     ...timestamps,
   },
-  (t) => [
-    index("order_status_date_idx").on(t.status, t.createdAt),
-    index("order_customer_idx").on(t.customerId),
+  (table) => [
+    index("order_status_date_idx").on(table.status, table.createdAt),
+    index("order_customer_idx").on(table.customerId),
     check(
       "order_totals",
-      sql`${t.subtotalCents} >= 0 AND ${t.taxCents} >= 0 AND ${t.deliveryFeeCents} >= 0 AND ${t.totalCents} = ${t.subtotalCents} + ${t.taxCents} + ${t.deliveryFeeCents}`,
+      sql`${table.subtotalCents} >= 0 AND ${table.taxCents} >= 0 AND ${table.deliveryFeeCents} >= 0 AND ${table.totalCents} = ${table.subtotalCents} + ${table.taxCents} + ${table.deliveryFeeCents}`,
     ),
   ],
 );
 
+/** Immutable purchase snapshots; dish references prevent deleting historical menu records. */
 export const orderItems = pgTable(
   "order_items",
   {
@@ -154,13 +163,14 @@ export const orderItems = pgTable(
     unitPriceCents: integer("unit_price_cents").notNull(),
     quantity: integer("quantity").notNull(),
   },
-  (t) => [
-    index("order_item_order_idx").on(t.orderId),
-    check("order_item_quantity", sql`${t.quantity} BETWEEN 1 AND 99`),
-    check("order_item_price", sql`${t.unitPriceCents} > 0`),
+  (table) => [
+    index("order_item_order_idx").on(table.orderId),
+    check("order_item_quantity", sql`${table.quantity} BETWEEN 1 AND 99`),
+    check("order_item_price", sql`${table.unitPriceCents} > 0`),
   ],
 );
 
+/** Append-only application timeline for placement and subsequent kitchen actions. */
 export const orderEvents = pgTable(
   "order_events",
   {
@@ -173,5 +183,5 @@ export const orderEvents = pgTable(
     note: text("note").notNull().default(""),
     createdAt: timestamps.createdAt,
   },
-  (t) => [index("order_event_order_idx").on(t.orderId)],
+  (table) => [index("order_event_order_idx").on(table.orderId)],
 );
